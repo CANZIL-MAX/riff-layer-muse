@@ -1,17 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { TrashIcon, VolumeXIcon, Volume2Icon } from 'lucide-react';
 import { WaveformDisplay } from './WaveformDisplay';
-
-interface AudioTrack {
-  id: string;
-  name: string;
-  audioBuffer: AudioBuffer;
-  isPlaying: boolean;
-  isMuted: boolean;
-  volume: number;
-}
+import { AudioTrack, ProjectManager } from '@/services/ProjectManager';
 
 interface AudioLayerProps {
   track: AudioTrack;
@@ -33,6 +25,26 @@ export function AudioLayer({
   duration 
 }: AudioLayerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  useEffect(() => {
+    const loadAudioBuffer = async () => {
+      if (track.audioData && !audioBuffer) {
+        try {
+          if (!audioContextRef.current) {
+            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+          }
+          const buffer = await ProjectManager.base64ToAudioBuffer(track.audioData, audioContextRef.current);
+          setAudioBuffer(buffer);
+        } catch (error) {
+          console.error('Error loading audio buffer:', error);
+        }
+      }
+    };
+
+    loadAudioBuffer();
+  }, [track.audioData, audioBuffer]);
 
   return (
     <Card className="bg-layer-bg border-border shadow-layer overflow-hidden">
@@ -45,7 +57,7 @@ export function AudioLayer({
             <div>
               <h4 className="font-medium text-card-foreground">{track.name}</h4>
               <p className="text-xs text-muted-foreground">
-                {track.audioBuffer.duration.toFixed(1)}s
+                {track.duration.toFixed(1)}s
               </p>
             </div>
           </div>
@@ -80,13 +92,19 @@ export function AudioLayer({
           className="h-16 bg-timeline rounded-lg overflow-hidden cursor-pointer border border-border"
           onClick={() => setIsExpanded(!isExpanded)}
         >
-          <WaveformDisplay
-            audioBuffer={track.audioBuffer}
-            isPlaying={isPlaying && !track.isMuted}
-            isMuted={track.isMuted}
-            currentTime={currentTime}
-            height={64}
-          />
+          {audioBuffer ? (
+            <WaveformDisplay
+              audioBuffer={audioBuffer}
+              isPlaying={isPlaying && !track.isMuted}
+              isMuted={track.isMuted}
+              currentTime={currentTime}
+              height={64}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-muted-foreground">
+              Loading waveform...
+            </div>
+          )}
         </div>
 
         {/* Recording indicator when playing */}
