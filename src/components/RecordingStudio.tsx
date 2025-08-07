@@ -1,45 +1,64 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Card } from '@/components/ui/card';
+import { ProjectManager } from '@/services/ProjectManager';
+import { AudioMixer } from '@/components/AudioMixer';
+import { PlaybackEngine } from '@/services/PlaybackEngine';
+import { ProjectSelector } from '@/components/ProjectSelector';
+import { AudioLayer } from '@/components/AudioLayer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { PlayIcon, PauseIcon, MicIcon, Square, UploadIcon, DownloadIcon, SaveIcon, ShareIcon, FolderIcon } from 'lucide-react';
-import { AudioLayer } from './AudioLayer';
-import { ProjectSelector } from './ProjectSelector';
+import { Card } from '@/components/ui/card';
+import { Slider } from '@/components/ui/slider';
+import { Toaster } from '@/components/ui/toaster';
 import { useToast } from '@/hooks/use-toast';
-import { Project, AudioTrack, ProjectManager } from '@/services/ProjectManager';
-import { AudioMixer } from '@/components/AudioMixer';
+import { Mic, Play, Pause, Square, Upload, Save, Download, FolderOpen, Volume2 } from 'lucide-react';
+import { Project, AudioTrack } from '@/services/ProjectManager';
 
 export function RecordingStudio() {
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [tracks, setTracks] = useState<AudioTrack[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [projectName, setProjectName] = useState('');
+  const [recordingName, setRecordingName] = useState('');
+  const [projectName, setProjectName] = useState('New Project');
   const [showProjectSelector, setShowProjectSelector] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [masterVolume, setMasterVolume] = useState(1);
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
   const { toast } = useToast();
 
-  // Initialize with a default project
   useEffect(() => {
-    if (!currentProject) {
-      const defaultProject = ProjectManager.createNewProject('Untitled Project');
-      setCurrentProject(defaultProject);
-      setProjectName(defaultProject.name);
-    }
-  }, [currentProject]);
+    const initProject = async () => {
+      try {
+        await ProjectManager.initialize();
+        await PlaybackEngine.initialize();
+        
+        // Set up time update callback
+        PlaybackEngine.setOnTimeUpdate(setCurrentTime);
+        
+        const defaultProject = ProjectManager.createNewProject('My First Project');
+        setCurrentProject(defaultProject);
+        setProjectName(defaultProject.name);
+      } catch (error) {
+        console.error('Failed to initialize project:', error);
+        toast({
+          title: "Error",
+          description: "Failed to initialize project manager",
+          variant: "destructive",
+        });
+      }
+    };
 
-  // Update tracks when project changes
+    initProject();
+  }, [toast]);
+
   useEffect(() => {
     if (currentProject) {
       setTracks(currentProject.tracks);
       setProjectName(currentProject.name);
-      setDuration(Math.max(...currentProject.tracks.map(t => t.duration), 0));
     }
   }, [currentProject]);
 
@@ -82,79 +101,157 @@ export function RecordingStudio() {
 
   const startRecording = async () => {
     try {
-      await initAudioContext();
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Get user media
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 44100,
+        } 
+      });
       
-      mediaRecorderRef.current = new MediaRecorder(stream);
+      streamRef.current = stream;
+
+      // Start playing existing tracks if any exist
+      const unmutedTracks = tracks.filter(track => !track.isMuted && track.audioData);
+      if (unmutedTracks.length > 0) {
+        await PlaybackEngine.playTracks(unmutedTracks);
+        setIsPlaying(true);
+      }
+
+      // Create MediaRecorder with proper options
+      const options: MediaRecorderOptions = {};
+      
+      // Try to use WAV format if supported, fallback to webm
+      if (MediaRecorder.isTypeSupported('audio/wav')) {
+        options.mimeType = 'audio/wav';
+      } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        options.mimeType = 'audio/webm;codecs=opus';
+      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+        options.mimeType = 'audio/mp4';
+      }
+
+      const mediaRecorder = new MediaRecorder(stream, options);
+      mediaRecorderRef.current = mediaRecorder;
       recordedChunksRef.current = [];
 
-      mediaRecorderRef.current.ondataavailable = (event) => {
+      mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           recordedChunksRef.current.push(event.data);
         }
       };
 
-      mediaRecorderRef.current.onstop = async () => {
-        const blob = new Blob(recordedChunksRef.current, { type: 'audio/wav' });
-        const arrayBuffer = await blob.arrayBuffer();
-        const audioBuffer = await audioContextRef.current!.decodeAudioData(arrayBuffer);
-        
-        // Convert to base64 for storage
-        const audioData = ProjectManager.audioBufferToBase64(audioBuffer);
-        
-        const newTrack: AudioTrack = {
-          id: Date.now().toString(),
-          name: `Recording ${tracks.length + 1}`,
-          audioData,
-          isPlaying: false,
-          isMuted: false,
-          volume: 1,
-          duration: audioBuffer.duration
-        };
-
-        const updatedTracks = [...tracks, newTrack];
-        setTracks(updatedTracks);
-        setDuration(Math.max(duration, audioBuffer.duration));
-        
-        // Auto-save the project
-        if (currentProject) {
-          const updatedProject = {
-            ...currentProject,
-            tracks: updatedTracks,
-            lastModified: new Date().toISOString()
-          };
-          await ProjectManager.saveProject(updatedProject);
-          setCurrentProject(updatedProject);
-        }
-        
-        toast({
-          title: "Recording saved!",
-          description: `New track "${newTrack.name}" added to your project.`,
-        });
-      };
-
-      mediaRecorderRef.current.start();
+      mediaRecorder.start(100); // Collect data every 100ms for better quality
       setIsRecording(true);
       
       toast({
-        title: "Recording started",
-        description: "Speak or play into your microphone",
+        title: "Recording Started",
+        description: unmutedTracks.length > 0 
+          ? `Recording with ${unmutedTracks.length} track(s) playing`
+          : "Recording audio...",
       });
     } catch (error) {
       console.error('Error starting recording:', error);
       toast({
-        title: "Recording failed",
-        description: "Could not access microphone. Please check permissions.",
+        title: "Recording Error",
+        description: "Could not start recording. Please check microphone permissions.",
         variant: "destructive",
       });
     }
   };
 
-  const stopRecording = () => {
+  const stopRecording = async () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
       setIsRecording(false);
+
+      // Stop playback if it was running during recording
+      if (isPlaying) {
+        PlaybackEngine.stop();
+        setIsPlaying(false);
+      }
+
+      // Stop the media stream
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+
+      // Wait for the recording to be processed
+      await new Promise(resolve => {
+        mediaRecorderRef.current!.onstop = async () => {
+          try {
+            // Create blob from recorded chunks
+            const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
+            const audioBlob = new Blob(recordedChunksRef.current, { type: mimeType });
+            
+            // Convert blob to ArrayBuffer
+            const arrayBuffer = await audioBlob.arrayBuffer();
+            
+            // Initialize audio context if needed
+            if (!audioContextRef.current) {
+              audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+            }
+            
+            // Resume context if suspended
+            if (audioContextRef.current.state === 'suspended') {
+              await audioContextRef.current.resume();
+            }
+            
+            // Decode audio data
+            const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
+            
+            // Convert to WAV format and then to base64
+            const wavBuffer = AudioMixer.audioBufferToWav(audioBuffer);
+            const base64Data = AudioMixer.arrayBufferToBase64(wavBuffer);
+            
+            // Add data URL prefix for proper format
+            const dataUrl = `data:audio/wav;base64,${base64Data}`;
+            
+            // Create new track
+            const newTrack = {
+              id: Date.now().toString(),
+              name: recordingName || `Recording ${tracks.length + 1}`,
+              audioData: dataUrl,
+              isPlaying: false,
+              isMuted: false,
+              volume: 1,
+              duration: audioBuffer.duration,
+            };
+
+            // Add track to current tracks
+            const newTracks = [...tracks, newTrack];
+            setTracks(newTracks);
+
+            // Auto-save the project
+            if (currentProject) {
+              const updatedProject = {
+                ...currentProject,
+                tracks: newTracks,
+                lastModified: new Date().toISOString(),
+              };
+              setCurrentProject(updatedProject);
+              await ProjectManager.saveProject(updatedProject);
+            }
+
+            setRecordingName('');
+            
+            toast({
+              title: "Recording Saved",
+              description: `Track "${newTrack.name}" has been added to your project`,
+            });
+          } catch (error) {
+            console.error('Error processing recording:', error);
+            toast({
+              title: "Processing Error",
+              description: "Failed to process the recording. Please try again.",
+              variant: "destructive",
+            });
+          }
+          resolve(undefined);
+        };
+      });
     }
   };
 
@@ -167,13 +264,15 @@ export function RecordingStudio() {
       const arrayBuffer = await file.arrayBuffer();
       const audioBuffer = await audioContextRef.current!.decodeAudioData(arrayBuffer);
       
-      // Convert to base64 for storage
-      const audioData = ProjectManager.audioBufferToBase64(audioBuffer);
+      // Convert to WAV format and then to base64
+      const wavBuffer = AudioMixer.audioBufferToWav(audioBuffer);
+      const base64Data = AudioMixer.arrayBufferToBase64(wavBuffer);
+      const dataUrl = `data:audio/wav;base64,${base64Data}`;
       
       const newTrack: AudioTrack = {
         id: Date.now().toString(),
         name: file.name.replace(/\.[^/.]+$/, ''),
-        audioData,
+        audioData: dataUrl,
         isPlaying: false,
         isMuted: false,
         volume: 1,
@@ -182,7 +281,6 @@ export function RecordingStudio() {
 
       const updatedTracks = [...tracks, newTrack];
       setTracks(updatedTracks);
-      setDuration(Math.max(duration, audioBuffer.duration));
       
       // Auto-save the project
       if (currentProject) {
@@ -207,21 +305,33 @@ export function RecordingStudio() {
         variant: "destructive",
       });
     }
+
+    // Reset the input
+    event.target.value = '';
   };
 
-  const togglePlayback = () => {
+  const togglePlayback = async () => {
     if (isPlaying) {
+      PlaybackEngine.pause();
       setIsPlaying(false);
-      // Stop all tracks
-      setTracks(prev => prev.map(track => ({ ...track, isPlaying: false })));
     } else {
-      setIsPlaying(true);
-      // Start all unmuted tracks
-      setTracks(prev => prev.map(track => ({ 
-        ...track, 
-        isPlaying: !track.isMuted 
-      })));
+      const unmutedTracks = tracks.filter(track => !track.isMuted && track.audioData);
+      if (unmutedTracks.length > 0) {
+        await PlaybackEngine.playTracks(unmutedTracks);
+        setIsPlaying(true);
+      } else {
+        toast({
+          title: "No tracks to play",
+          description: "Add some audio tracks to start playback",
+        });
+      }
     }
+  };
+
+  const stopPlayback = () => {
+    PlaybackEngine.stop();
+    setIsPlaying(false);
+    setCurrentTime(0);
   };
 
   const exportProject = async () => {
@@ -234,8 +344,6 @@ export function RecordingStudio() {
       return;
     }
 
-    setIsExporting(true);
-    
     try {
       // Mix all unmuted tracks
       const unmutedTracks = tracks.filter(track => !track.isMuted && track.audioData);
@@ -258,7 +366,7 @@ export function RecordingStudio() {
       const wavArrayBuffer = AudioMixer.audioBufferToWav(mixedAudioBuffer);
       const audioData = AudioMixer.arrayBufferToBase64(wavArrayBuffer);
       
-      // Share using iOS share sheet
+      // Share using device share functionality
       await ProjectManager.shareAudioFile(audioData, `${projectName}.wav`);
       
       toast({
@@ -272,8 +380,6 @@ export function RecordingStudio() {
         description: "Could not export the project.",
         variant: "destructive",
       });
-    } finally {
-      setIsExporting(false);
     }
   };
 
@@ -313,7 +419,6 @@ export function RecordingStudio() {
 
   const handleProjectSelect = async (project: Project) => {
     try {
-      // Load the selected project
       setCurrentProject(project);
       setShowProjectSelector(false);
       
@@ -357,7 +462,7 @@ export function RecordingStudio() {
               size="sm"
               onClick={() => setShowProjectSelector(!showProjectSelector)}
             >
-              <FolderIcon className="w-4 h-4 mr-2" />
+              <FolderOpen className="w-4 h-4 mr-2" />
               Projects
             </Button>
           </div>
@@ -373,98 +478,115 @@ export function RecordingStudio() {
         )}
 
         {/* Transport Controls */}
-        <Card className="p-6 bg-gradient-surface border-border">
-          <div className="flex items-center justify-center gap-4">
-            <Button
-              variant={isRecording ? "destructive" : "default"}
-              size="lg"
-              onClick={isRecording ? stopRecording : startRecording}
-              className={isRecording ? "shadow-recording animate-pulse" : ""}
-            >
-              {isRecording ? (
-                <>
-                  <Square className="w-5 h-5 mr-2" />
-                  Stop Recording
-                </>
-              ) : (
-                <>
-                  <MicIcon className="w-5 h-5 mr-2" />
-                  Record
-                </>
-              )}
-            </Button>
+        <Card className="p-6">
+          <div className="space-y-4">
+            <div className="flex items-center justify-center gap-4 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Input
+                  value={recordingName}
+                  onChange={(e) => setRecordingName(e.target.value)}
+                  placeholder="Track name..."
+                  className="w-32"
+                />
+                <Button
+                  variant={isRecording ? "destructive" : "default"}
+                  onClick={isRecording ? stopRecording : startRecording}
+                  className={isRecording ? "animate-pulse" : ""}
+                >
+                  {isRecording ? (
+                    <>
+                      <Square className="w-4 h-4 mr-2" />
+                      Stop
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="w-4 h-4 mr-2" />
+                      Record
+                    </>
+                  )}
+                </Button>
+              </div>
 
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={togglePlayback}
-              disabled={tracks.length === 0}
-            >
-              {isPlaying ? (
-                <>
-                  <PauseIcon className="w-5 h-5 mr-2" />
-                  Pause
-                </>
-              ) : (
-                <>
-                  <PlayIcon className="w-5 h-5 mr-2" />
-                  Play All
-                </>
-              )}
-            </Button>
+              <div className="flex gap-2">
+                <Button
+                  onClick={togglePlayback}
+                  disabled={tracks.length === 0}
+                  variant={isPlaying ? "secondary" : "default"}
+                >
+                  {isPlaying ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+                  {isPlaying ? 'Pause' : 'Play'}
+                </Button>
 
-            <div className="relative">
-              <input
-                type="file"
-                accept="audio/*"
-                onChange={handleFileUpload}
-                className="absolute inset-0 opacity-0 cursor-pointer"
-              />
-              <Button variant="outline" size="lg">
-                <UploadIcon className="w-5 h-5 mr-2" />
-                Upload Audio
-              </Button>
+                <Button
+                  onClick={stopPlayback}
+                  disabled={!isPlaying && currentTime === 0}
+                  variant="outline"
+                >
+                  <Square className="w-4 h-4 mr-2" />
+                  Stop
+                </Button>
+
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    onChange={handleFileUpload}
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                  />
+                  <Button variant="outline">
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload
+                  </Button>
+                </div>
+
+                <Button onClick={saveCurrentProject} variant="outline">
+                  <Save className="w-4 h-4 mr-2" />
+                  Save
+                </Button>
+
+                <Button onClick={exportProject} variant="outline">
+                  <Download className="w-4 h-4 mr-2" />
+                  Export
+                </Button>
+              </div>
             </div>
 
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={saveCurrentProject}
-              disabled={!currentProject}
-            >
-              <SaveIcon className="w-5 h-5 mr-2" />
-              Save
-            </Button>
-
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={exportProject}
-              disabled={tracks.length === 0 || isExporting}
-            >
-              {isExporting ? (
-                <>
-                  <div className="w-5 h-5 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  Exporting...
-                </>
-              ) : (
-                <>
-                  <ShareIcon className="w-5 h-5 mr-2" />
-                  Share
-                </>
+            <div className="flex items-center gap-4 mt-4">
+              <div className="flex items-center gap-2">
+                <Volume2 className="w-4 h-4" />
+                <span className="text-sm">Master</span>
+                <Slider
+                  value={[masterVolume]}
+                  onValueChange={(value) => {
+                    setMasterVolume(value[0]);
+                    PlaybackEngine.setMasterVolume(value[0]);
+                  }}
+                  max={1}
+                  step={0.1}
+                  className="w-24"
+                />
+                <span className="text-sm text-muted-foreground">
+                  {Math.round(masterVolume * 100)}%
+                </span>
+              </div>
+              
+              {(isPlaying || currentTime > 0) && (
+                <div className="text-sm text-muted-foreground">
+                  Time: {Math.floor(currentTime / 60)}:{(currentTime % 60).toFixed(1).padStart(4, '0')}
+                </div>
               )}
-            </Button>
+            </div>
           </div>
         </Card>
 
-        {/* Timeline */}
-        <Card className="p-6 bg-card border-border">
+        {/* Audio Layers */}
+        <Card className="p-6">
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Audio Layers</h3>
             
             {tracks.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
-                <MicIcon className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <Mic className="w-12 h-12 mx-auto mb-4 opacity-50" />
                 <p>No audio tracks yet</p>
                 <p className="text-sm">Record or upload audio to get started</p>
               </div>
@@ -475,11 +597,10 @@ export function RecordingStudio() {
                     key={track.id}
                     track={track}
                     index={index}
-                    isPlaying={isPlaying && track.isPlaying}
-                    onRemove={() => removeTrack(track.id)}
-                    onToggleMute={() => toggleTrackMute(track.id)}
+                    isPlaying={isPlaying}
                     currentTime={currentTime}
-                    duration={duration}
+                    onToggleMute={(trackId) => toggleTrackMute(trackId)}
+                    onRemove={(trackId) => removeTrack(trackId)}
                   />
                 ))}
               </div>
@@ -487,6 +608,7 @@ export function RecordingStudio() {
           </div>
         </Card>
       </div>
+      <Toaster />
     </div>
   );
 }

@@ -9,22 +9,19 @@ interface AudioLayerProps {
   track: AudioTrack;
   index: number;
   isPlaying: boolean;
-  onRemove: () => void;
-  onToggleMute: () => void;
   currentTime: number;
-  duration: number;
+  onToggleMute: (trackId: string) => void;
+  onRemove: (trackId: string) => void;
 }
 
-export function AudioLayer({ 
-  track, 
-  index, 
-  isPlaying, 
-  onRemove, 
-  onToggleMute,
+export function AudioLayer({
+  track,
+  index,
+  isPlaying,
   currentTime,
-  duration 
+  onToggleMute,
+  onRemove,
 }: AudioLayerProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -35,6 +32,11 @@ export function AudioLayer({
           if (!audioContextRef.current) {
             audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
           }
+          
+          if (audioContextRef.current.state === 'suspended') {
+            await audioContextRef.current.resume();
+          }
+          
           const buffer = await ProjectManager.base64ToAudioBuffer(track.audioData, audioContextRef.current);
           setAudioBuffer(buffer);
         } catch (error) {
@@ -47,7 +49,7 @@ export function AudioLayer({
   }, [track.audioData, audioBuffer]);
 
   return (
-    <Card className="bg-layer-bg border-border shadow-layer overflow-hidden">
+    <Card className="bg-card border-border overflow-hidden">
       <div className="p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
@@ -66,7 +68,7 @@ export function AudioLayer({
             <Button
               variant="ghost"
               size="sm"
-              onClick={onToggleMute}
+              onClick={() => onToggleMute(track.id)}
               className={track.isMuted ? "text-destructive" : "text-muted-foreground"}
             >
               {track.isMuted ? (
@@ -79,7 +81,7 @@ export function AudioLayer({
             <Button
               variant="ghost"
               size="sm"
-              onClick={onRemove}
+              onClick={() => onRemove(track.id)}
               className="text-destructive hover:text-destructive-foreground hover:bg-destructive"
             >
               <TrashIcon className="w-4 h-4" />
@@ -88,17 +90,14 @@ export function AudioLayer({
         </div>
 
         {/* Waveform */}
-        <div 
-          className="h-16 bg-timeline rounded-lg overflow-hidden cursor-pointer border border-border"
-          onClick={() => setIsExpanded(!isExpanded)}
-        >
+        <div className="h-16 bg-muted rounded-lg overflow-hidden border border-border">
           {audioBuffer ? (
             <WaveformDisplay
               audioBuffer={audioBuffer}
               isPlaying={isPlaying && !track.isMuted}
               isMuted={track.isMuted}
               currentTime={currentTime}
-              height={64}
+              height={60}
             />
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -107,10 +106,10 @@ export function AudioLayer({
           )}
         </div>
 
-        {/* Recording indicator when playing */}
+        {/* Status indicators */}
         {isPlaying && !track.isMuted && (
-          <div className="mt-2 flex items-center gap-2 text-playing text-sm">
-            <div className="w-2 h-2 bg-playing rounded-full animate-pulse" />
+          <div className="mt-2 flex items-center gap-2 text-primary text-sm">
+            <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
             Playing
           </div>
         )}
