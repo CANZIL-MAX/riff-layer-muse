@@ -578,6 +578,7 @@ export function RecordingStudio() {
     });
   };
 
+
   return (
     <div className="min-h-screen bg-background p-4">
       <div className="max-w-6xl mx-auto space-y-6">
