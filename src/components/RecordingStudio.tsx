@@ -4,6 +4,7 @@ import { AudioMixer } from '@/components/AudioMixer';
 import { PlaybackEngine } from '@/services/PlaybackEngine';
 import { ProjectSelector } from '@/components/ProjectSelector';
 import { AudioLayer } from '@/components/AudioLayer';
+import { Timeline } from '@/components/Timeline';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -23,6 +24,7 @@ export function RecordingStudio() {
   const [showProjectSelector, setShowProjectSelector] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [masterVolume, setMasterVolume] = useState(1);
+  const [recordingStartTime, setRecordingStartTime] = useState(0);
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -104,6 +106,11 @@ export function RecordingStudio() {
   };
 
   const startRecordingWithPlayback = async () => {
+    // Seek to the recording start time first
+    if (recordingStartTime > 0) {
+      PlaybackEngine.seekTo(recordingStartTime);
+      setCurrentTime(recordingStartTime);
+    }
     await startRecordingWithOptions(true);
   };
 
@@ -345,6 +352,11 @@ export function RecordingStudio() {
     PlaybackEngine.stop();
     setIsPlaying(false);
     setCurrentTime(0);
+  };
+
+  const handleSeek = (time: number) => {
+    PlaybackEngine.seekTo(time);
+    setCurrentTime(time);
   };
 
   const exportProject = async () => {
@@ -603,6 +615,18 @@ export function RecordingStudio() {
             </div>
           </div>
         </Card>
+
+        {/* Timeline */}
+        <Timeline
+          tracks={tracks}
+          currentTime={currentTime}
+          isPlaying={isPlaying}
+          recordingStartTime={recordingStartTime}
+          onRecordingStartTimeChange={setRecordingStartTime}
+          onSeek={handleSeek}
+          onToggleTrackMute={toggleTrackMute}
+          onRemoveTrack={removeTrack}
+        />
 
         {/* Audio Layers */}
         <Card className="p-6">

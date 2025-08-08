@@ -94,6 +94,15 @@ export class PlaybackEngineService {
     this.stopTimeUpdate();
   }
 
+  seekTo(time: number): void {
+    this.pauseTime = Math.max(0, time);
+    if (this.isPlaying) {
+      // Restart playback from new position
+      this.stop();
+      // Will be restarted by caller if needed
+    }
+  }
+
   getCurrentTime(): number {
     if (!this.audioContext || !this.isPlaying) return this.pauseTime;
     return this.pauseTime + (this.audioContext.currentTime - this.startTime);
