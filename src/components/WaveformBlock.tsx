@@ -167,9 +167,11 @@ export function WaveformBlock({
             isPlaying={isPlaying && !track.isMuted}
             isMuted={track.isMuted}
             currentTime={currentTime - startTime + trimStart}
+            width={blockWidth}
             height={64}
             trimStart={trimStart}
             trimEnd={trimEnd}
+            zoomLevel={zoomLevel}
           />
         ) : (
           <div className="flex items-center justify-center h-full text-primary-foreground text-xs">

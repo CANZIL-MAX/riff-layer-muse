@@ -145,6 +145,7 @@ export function TimelineTrack({
                 isPlaying={false}
                 isMuted={track.isMuted}
                 currentTime={0}
+                width={300}
                 height={40}
               />
             ) : (

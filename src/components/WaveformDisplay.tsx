@@ -1,23 +1,29 @@
 import { useEffect, useRef } from 'react';
 
 interface WaveformDisplayProps {
-  audioBuffer: AudioBuffer;
-  isPlaying: boolean;
-  isMuted: boolean;
-  currentTime: number;
-  height: number;
+  audioBuffer: AudioBuffer | null;
   trimStart?: number;
   trimEnd?: number;
+  currentTime?: number;
+  isPlaying?: boolean;
+  isMuted?: boolean;
+  width: number;
+  height: number;
+  className?: string;
+  zoomLevel?: number;
 }
 
 export function WaveformDisplay({ 
   audioBuffer, 
-  isPlaying, 
-  isMuted, 
-  currentTime, 
-  height,
-  trimStart = 0,
-  trimEnd
+  trimStart = 0, 
+  trimEnd, 
+  currentTime = 0, 
+  isPlaying = false, 
+  isMuted = false,
+  width, 
+  height, 
+  className = "",
+  zoomLevel = 1 
 }: WaveformDisplayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -28,70 +34,158 @@ export function WaveformDisplay({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const width = canvas.width;
-    const data = audioBuffer.getChannelData(0);
+    // High DPI support - scale canvas for crisp rendering
+    const devicePixelRatio = window.devicePixelRatio || 1;
+    const scaleFactor = devicePixelRatio * Math.max(1, zoomLevel * 0.5);
     
-    // Calculate trim boundaries
-    const actualTrimEnd = trimEnd || audioBuffer.duration;
-    const trimDuration = actualTrimEnd - trimStart;
-    const trimStartSample = Math.floor((trimStart / audioBuffer.duration) * data.length);
-    const trimEndSample = Math.floor((actualTrimEnd / audioBuffer.duration) * data.length);
-    const trimmedLength = trimEndSample - trimStartSample;
-    
-    const step = Math.ceil(trimmedLength / width);
-    const amp = height / 2;
+    canvas.width = width * scaleFactor;
+    canvas.height = height * scaleFactor;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    ctx.scale(scaleFactor, scaleFactor);
 
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
 
-    // Draw waveform
-    ctx.beginPath();
-    ctx.strokeStyle = isMuted 
-      ? 'hsl(var(--muted-foreground))' 
-      : isPlaying 
-        ? 'hsl(var(--waveform-active))' 
-        : 'hsl(var(--waveform))';
-    ctx.lineWidth = 1;
+    // Get audio data
+    const channelData = audioBuffer.getChannelData(0);
+    const sampleRate = audioBuffer.sampleRate;
+    const duration = audioBuffer.duration;
+    
+    // Calculate effective trim boundaries
+    const effectiveTrimEnd = trimEnd || duration;
+    const displayDuration = effectiveTrimEnd - trimStart;
+    
+    if (displayDuration <= 0) return;
 
-    for (let i = 0; i < width; i++) {
-      let min = 1.0;
-      let max = -1.0;
+    // Calculate sampling strategy based on zoom level
+    const samplesPerPixel = Math.max(1, Math.floor((displayDuration * sampleRate) / width / Math.max(1, zoomLevel)));
+    
+    // Ultra-high detail when zoomed in
+    const detailMultiplier = Math.min(8, Math.max(1, zoomLevel * 2));
+    const renderSamplesPerPixel = Math.max(1, Math.floor(samplesPerPixel / detailMultiplier));
+    
+    const startSample = Math.floor(trimStart * sampleRate);
+    const endSample = Math.floor(effectiveTrimEnd * sampleRate);
+    
+    // Waveform styling
+    const centerY = height / 2;
+    const amplitude = height * 0.4;
+    
+    // Draw waveform with adaptive line width
+    const waveformColor = isMuted ? 'hsl(var(--muted-foreground))' : 'hsl(var(--primary))';
+    const waveformFillColor = isMuted ? 'hsla(var(--muted-foreground), 0.2)' : 'hsla(var(--primary), 0.3)';
+    
+    ctx.strokeStyle = waveformColor;
+    ctx.fillStyle = waveformFillColor;
+    ctx.lineWidth = Math.max(0.3, Math.min(1, 2 / zoomLevel));
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // High-quality waveform rendering
+    ctx.beginPath();
+    
+    const pixelsToRender = Math.min(width, Math.ceil((endSample - startSample) / renderSamplesPerPixel));
+    
+    for (let x = 0; x < pixelsToRender; x++) {
+      const sampleStart = startSample + Math.floor(x * renderSamplesPerPixel);
+      const sampleEnd = Math.min(sampleStart + renderSamplesPerPixel, endSample, channelData.length);
       
-      for (let j = 0; j < step; j++) {
-        const sampleIndex = trimStartSample + (i * step) + j;
-        if (sampleIndex < trimEndSample && sampleIndex < data.length) {
-          const datum = data[sampleIndex];
-          if (datum < min) min = datum;
-          if (datum > max) max = datum;
-        }
+      if (sampleStart >= channelData.length) break;
+      
+      // Calculate RMS and peak for better visualization
+      let rmsSum = 0;
+      let peak = 0;
+      let sampleCount = 0;
+      
+      for (let i = sampleStart; i < sampleEnd; i++) {
+        const sample = channelData[i] || 0;
+        rmsSum += sample * sample;
+        peak = Math.max(peak, Math.abs(sample));
+        sampleCount++;
       }
       
-      ctx.moveTo(i, (1 + min) * amp);
-      ctx.lineTo(i, (1 + max) * amp);
+      const rms = sampleCount > 0 ? Math.sqrt(rmsSum / sampleCount) : 0;
+      
+      // Use a combination of RMS and peak for more detailed visualization
+      const combinedAmplitude = (rms * 0.7 + peak * 0.3) * amplitude;
+      
+      const y1 = centerY - combinedAmplitude;
+      const y2 = centerY + combinedAmplitude;
+      
+      if (x === 0) {
+        ctx.moveTo(x, y1);
+      } else {
+        ctx.lineTo(x, y1);
+      }
     }
     
+    // Complete the top part of the waveform
+    for (let x = pixelsToRender - 1; x >= 0; x--) {
+      const sampleStart = startSample + Math.floor(x * renderSamplesPerPixel);
+      const sampleEnd = Math.min(sampleStart + renderSamplesPerPixel, endSample, channelData.length);
+      
+      if (sampleStart >= channelData.length) continue;
+      
+      let rmsSum = 0;
+      let peak = 0;
+      let sampleCount = 0;
+      
+      for (let i = sampleStart; i < sampleEnd; i++) {
+        const sample = channelData[i] || 0;
+        rmsSum += sample * sample;
+        peak = Math.max(peak, Math.abs(sample));
+        sampleCount++;
+      }
+      
+      const rms = sampleCount > 0 ? Math.sqrt(rmsSum / sampleCount) : 0;
+      const combinedAmplitude = (rms * 0.7 + peak * 0.3) * amplitude;
+      const y2 = centerY + combinedAmplitude;
+      
+      ctx.lineTo(x, y2);
+    }
+    
+    ctx.closePath();
+    ctx.fill();
     ctx.stroke();
 
-    // Draw progress indicator
-    if (isPlaying && !isMuted && currentTime >= 0) {
-      const relativeTime = Math.max(0, Math.min(currentTime, trimDuration));
-      const progressX = (relativeTime / trimDuration) * width;
-      ctx.fillStyle = 'hsl(var(--waveform-active))';
-      ctx.fillRect(0, 0, progressX, height);
-      ctx.globalCompositeOperation = 'multiply';
+    // Draw center line
+    ctx.strokeStyle = 'hsla(var(--muted-foreground), 0.2)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, centerY);
+    ctx.lineTo(width, centerY);
+    ctx.stroke();
+
+    // Draw playback progress indicator
+    if (isPlaying && !isMuted && currentTime >= trimStart && currentTime <= effectiveTrimEnd) {
+      const relativeTime = currentTime - trimStart;
+      const progressX = (relativeTime / displayDuration) * width;
       
-      // Reset composite operation
-      ctx.globalCompositeOperation = 'source-over';
+      // Playback line
+      ctx.strokeStyle = 'hsl(var(--primary))';
+      ctx.lineWidth = Math.max(1, 2 / zoomLevel);
+      ctx.beginPath();
+      ctx.moveTo(progressX, 0);
+      ctx.lineTo(progressX, height);
+      ctx.stroke();
+      
+      // Progress overlay
+      ctx.fillStyle = 'hsla(var(--primary), 0.1)';
+      ctx.fillRect(0, 0, progressX, height);
     }
-  }, [audioBuffer, isPlaying, isMuted, currentTime, height, trimStart, trimEnd]);
+
+  }, [audioBuffer, trimStart, trimEnd, currentTime, isPlaying, isMuted, width, height, zoomLevel]);
 
   return (
     <canvas
       ref={canvasRef}
-      width={800}
-      height={height}
-      className="w-full h-full"
-      style={{ height: `${height}px` }}
+      className={`block ${className}`}
+      style={{ 
+        width: `${width}px`, 
+        height: `${height}px`,
+        imageRendering: 'crisp-edges'
+      }}
     />
   );
 }

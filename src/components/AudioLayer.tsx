@@ -131,6 +131,7 @@ export function AudioLayer({
               isPlaying={isPlaying && !track.isMuted}
               isMuted={track.isMuted}
               currentTime={currentTime}
+              width={400}
               height={60}
             />
           ) : (
