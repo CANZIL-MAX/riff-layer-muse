@@ -20,6 +20,7 @@ import { Project, AudioTrack } from '@/services/ProjectManager';
 
 export function RecordingStudio() {
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [tracks, setTracks] = useState<AudioTrack[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -81,19 +82,25 @@ export function RecordingStudio() {
   }, [toast]);
 
   useEffect(() => {
-    if (currentProject) {
+    if (currentProject && currentProject.id !== currentProjectId) {
+      // Only load settings when actually switching to a different project
+      setCurrentProjectId(currentProject.id);
       setTracks(currentProject.tracks);
       setProjectName(currentProject.name);
       
-      // Load project settings
+      // Load project settings only when switching projects
       if (currentProject.settings) {
         setBpm(currentProject.settings.tempo || 120);
         setIsMetronomeEnabled(currentProject.settings.metronomeEnabled || false);
         setMetronomeVolume(currentProject.settings.metronomeVolume || 0.5);
         setSnapToGrid(currentProject.settings.snapToGrid !== false);
       }
+    } else if (currentProject && currentProject.id === currentProjectId) {
+      // Just update tracks and name, keep current settings
+      setTracks(currentProject.tracks);
+      setProjectName(currentProject.name);
     }
-  }, [currentProject]);
+  }, [currentProject, currentProjectId]);
 
   const initAudioContext = useCallback(async () => {
     if (!audioContextRef.current) {
@@ -123,6 +130,7 @@ export function RecordingStudio() {
       };
 
       await ProjectManager.saveProject(updatedProject);
+      // Update the project but keep the same ID to prevent settings reset
       setCurrentProject(updatedProject);
       
       toast({
