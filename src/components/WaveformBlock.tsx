@@ -43,8 +43,6 @@ export function WaveformBlock({
     const loadAudioBuffer = async () => {
       if (track.audioData && !audioBuffer) {
         try {
-          console.log('Loading audio buffer for track:', track.id, 'data length:', track.audioData.length);
-          
           if (!audioContextRef.current) {
             audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
           }
@@ -59,8 +57,6 @@ export function WaveformBlock({
             cleanBase64 = track.audioData.split(',')[1];
           }
           
-          console.log('Clean base64 length:', cleanBase64.length);
-          
           const binaryString = atob(cleanBase64);
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
@@ -69,10 +65,8 @@ export function WaveformBlock({
           
           const buffer = await audioContextRef.current.decodeAudioData(bytes.buffer);
           setAudioBuffer(buffer);
-          console.log('Audio buffer loaded successfully for track:', track.id);
         } catch (error) {
           console.error('Error loading audio buffer for waveform block:', error);
-          console.error('Track audio data preview:', track.audioData.substring(0, 100));
         }
       }
     };
@@ -94,16 +88,12 @@ export function WaveformBlock({
 
     // Get the timeline container to calculate proper coordinates
     const timelineElement = e.currentTarget.closest('[data-timeline]') || 
-                           e.currentTarget.closest('.relative.bg-timeline\\/30') ||
                            document.querySelector('[data-timeline]');
     
     const timelineRect = timelineElement?.getBoundingClientRect();
     
-    // Calculate initial position in timeline coordinate space
-    const rawStartX = e.clientX - (timelineRect?.left || 0);
-    const startX = rawStartX + (scrollOffset || 0);
-    
-    console.log('Drag start - clientX:', e.clientX, 'timelineLeft:', timelineRect?.left, 'scrollOffset:', scrollOffset, 'finalStartX:', startX);
+    // Calculate initial position relative to the timeline, accounting for scroll
+    const startX = e.clientX - (timelineRect?.left || 0);
     
     const initialStartTime = startTime;
     const initialTrimStart = trimStart;
@@ -118,13 +108,10 @@ export function WaveformBlock({
     }
 
     const handleMouseMove = (e: MouseEvent) => {
-      // Calculate mouse position relative to timeline with scroll offset
-      const rawCurrentX = e.clientX - (timelineRect?.left || 0);
-      const currentX = rawCurrentX + (scrollOffset || 0);
+      // Calculate current mouse position relative to timeline
+      const currentX = e.clientX - (timelineRect?.left || 0);
       const deltaX = currentX - startX;
       const deltaTime = pixelsToTime(deltaX);
-      
-      console.log('Drag move - clientX:', e.clientX, 'rawCurrentX:', rawCurrentX, 'currentX:', currentX, 'deltaX:', deltaX, 'deltaTime:', deltaTime);
 
       if (action === 'drag') {
         let newStartTime = Math.max(0, initialStartTime + deltaTime);
