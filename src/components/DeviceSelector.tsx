@@ -73,10 +73,16 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
           <Select 
             value={selectedDeviceId || ''} 
             onValueChange={(value) => onDeviceChange(value || null)}
-            disabled={isLoading}
+            disabled={isLoading || devices.length === 0}
           >
             <SelectTrigger className="flex-1">
-              <SelectValue placeholder={isLoading ? "Loading devices..." : "Select microphone"} />
+              <SelectValue placeholder={
+                isLoading 
+                  ? "Loading devices..." 
+                  : devices.length === 0 
+                    ? "No microphones found" 
+                    : "Select microphone"
+              } />
             </SelectTrigger>
             <SelectContent>
               {devices.map((device) => (
@@ -84,11 +90,6 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
                   {device.label || `Microphone ${device.deviceId.slice(0, 8)}`}
                 </SelectItem>
               ))}
-              {devices.length === 0 && (
-                <SelectItem value="" disabled>
-                  No microphones found
-                </SelectItem>
-              )}
             </SelectContent>
           </Select>
           
