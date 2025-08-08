@@ -13,6 +13,7 @@ interface TimelineProps {
   onSeek: (time: number) => void;
   onToggleTrackMute: (trackId: string) => void;
   onRemoveTrack: (trackId: string) => void;
+  onUpdateTrackName: (trackId: string, name: string) => void;
 }
 
 export function Timeline({ 
@@ -23,7 +24,8 @@ export function Timeline({
   onRecordingStartTimeChange,
   onSeek,
   onToggleTrackMute, 
-  onRemoveTrack 
+  onRemoveTrack,
+  onUpdateTrackName
 }: TimelineProps) {
   const timelineRef = useRef<HTMLDivElement>(null);
   const { 
@@ -166,6 +168,7 @@ export function Timeline({
                 timeToPixels={timeToPixels}
                 onToggleMute={onToggleTrackMute}
                 onRemove={onRemoveTrack}
+                onUpdateTrackName={onUpdateTrackName}
                 width={timelineWidth}
               />
             ))

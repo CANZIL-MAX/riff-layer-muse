@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { TrashIcon, VolumeXIcon, Volume2Icon } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { TrashIcon, VolumeXIcon, Volume2Icon, Edit3 } from 'lucide-react';
 import { WaveformDisplay } from './WaveformDisplay';
 import { AudioTrack, ProjectManager } from '@/services/ProjectManager';
 
@@ -12,6 +13,7 @@ interface AudioLayerProps {
   currentTime: number;
   onToggleMute: (trackId: string) => void;
   onRemove: (trackId: string) => void;
+  onUpdateTrackName: (trackId: string, name: string) => void;
 }
 
 export function AudioLayer({
@@ -21,8 +23,11 @@ export function AudioLayer({
   currentTime,
   onToggleMute,
   onRemove,
+  onUpdateTrackName,
 }: AudioLayerProps) {
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editName, setEditName] = useState(track.name);
   const audioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
@@ -49,15 +54,44 @@ export function AudioLayer({
   }, [track.audioData, audioBuffer]);
 
   return (
-    <Card className="bg-card border-border overflow-hidden">
+    <Card className="bg-card border-border overflow-hidden group">
       <div className="p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-medium">
               {index + 1}
             </div>
-            <div>
-              <h4 className="font-medium text-card-foreground">{track.name}</h4>
+            <div className="flex-1">
+              {isEditingName ? (
+                <Input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  onBlur={() => {
+                    setIsEditingName(false);
+                    onUpdateTrackName(track.id, editName);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      setIsEditingName(false);
+                      onUpdateTrackName(track.id, editName);
+                    }
+                    if (e.key === 'Escape') {
+                      setIsEditingName(false);
+                      setEditName(track.name);
+                    }
+                  }}
+                  className="h-6 text-sm font-medium"
+                  autoFocus
+                />
+              ) : (
+                <div 
+                  className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 rounded px-1 py-0.5 transition-colors"
+                  onClick={() => setIsEditingName(true)}
+                >
+                  <h4 className="font-medium text-card-foreground">{track.name}</h4>
+                  <Edit3 className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+              )}
               <p className="text-xs text-muted-foreground">
                 {track.duration.toFixed(1)}s
               </p>

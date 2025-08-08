@@ -5,6 +5,7 @@ import { PlaybackEngine } from '@/services/PlaybackEngine';
 import { ProjectSelector } from '@/components/ProjectSelector';
 import { AudioLayer } from '@/components/AudioLayer';
 import { Timeline } from '@/components/Timeline';
+import { DeviceSelector } from '@/components/DeviceSelector';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -25,6 +26,7 @@ export function RecordingStudio() {
   const [currentTime, setCurrentTime] = useState(0);
   const [masterVolume, setMasterVolume] = useState(1);
   const [recordingStartTime, setRecordingStartTime] = useState(0);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -116,15 +118,18 @@ export function RecordingStudio() {
 
   const startRecordingWithOptions = async (withPlayback: boolean) => {
     try {
-      // Get user media
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      // Get user media with selected device
+      const constraints: MediaStreamConstraints = { 
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
           sampleRate: 44100,
+          ...(selectedDeviceId && { deviceId: { exact: selectedDeviceId } })
         } 
-      });
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
       streamRef.current = stream;
 
@@ -466,6 +471,26 @@ export function RecordingStudio() {
     setShowProjectSelector(false);
   };
 
+  const updateTrackName = async (trackId: string, newName: string) => {
+    if (!newName.trim()) return;
+    
+    const updatedTracks = tracks.map(track => 
+      track.id === trackId ? { ...track, name: newName.trim() } : track
+    );
+    setTracks(updatedTracks);
+    
+    // Auto-save the project
+    if (currentProject) {
+      const updatedProject = {
+        ...currentProject,
+        tracks: updatedTracks,
+        lastModified: new Date().toISOString()
+      };
+      await ProjectManager.saveProject(updatedProject);
+      setCurrentProject(updatedProject);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background p-4">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -502,17 +527,43 @@ export function RecordingStudio() {
           />
         )}
 
+        {/* Recording Setup */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <DeviceSelector
+            selectedDeviceId={selectedDeviceId}
+            onDeviceChange={setSelectedDeviceId}
+          />
+          
+          <Card className="bg-card border-border">
+            <div className="p-4">
+              <h3 className="text-base font-semibold mb-3">Recording Settings</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground mb-1 block">
+                    Track Name
+                  </label>
+                  <Input
+                    value={recordingName}
+                    onChange={(e) => setRecordingName(e.target.value)}
+                    placeholder="Enter track name..."
+                    className="w-full"
+                  />
+                </div>
+                {recordingStartTime > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Recording will start at {Math.floor(recordingStartTime / 60)}:{(recordingStartTime % 60).toFixed(1).padStart(4, '0')}
+                  </p>
+                )}
+              </div>
+            </div>
+          </Card>
+        </div>
+
         {/* Transport Controls */}
         <Card className="p-6">
           <div className="space-y-4">
             <div className="flex items-center justify-center gap-4 flex-wrap">
               <div className="flex items-center gap-2">
-                <Input
-                  value={recordingName}
-                  onChange={(e) => setRecordingName(e.target.value)}
-                  placeholder="Track name..."
-                  className="w-32"
-                />
                 <Button
                   variant={isRecording ? "destructive" : "default"}
                   onClick={isRecording ? stopRecording : startRecording}
@@ -626,6 +677,7 @@ export function RecordingStudio() {
           onSeek={handleSeek}
           onToggleTrackMute={toggleTrackMute}
           onRemoveTrack={removeTrack}
+          onUpdateTrackName={updateTrackName}
         />
 
         {/* Audio Layers */}
@@ -650,6 +702,7 @@ export function RecordingStudio() {
                     currentTime={currentTime}
                     onToggleMute={(trackId) => toggleTrackMute(trackId)}
                     onRemove={(trackId) => removeTrack(trackId)}
+                    onUpdateTrackName={updateTrackName}
                   />
                 ))}
               </div>
