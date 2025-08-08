@@ -140,7 +140,7 @@ export function RecordingStudio() {
         const unmutedTracks = tracks.filter(track => !track.isMuted && track.audioData);
         unmutedTracksCount = unmutedTracks.length;
         if (unmutedTracks.length > 0) {
-          await PlaybackEngine.playTracks(unmutedTracks);
+          await PlaybackEngine.playTracks(unmutedTracks, recordingStartTime);
           setIsPlaying(true);
         }
       }
@@ -343,7 +343,7 @@ export function RecordingStudio() {
     } else {
       const unmutedTracks = tracks.filter(track => !track.isMuted && track.audioData);
       if (unmutedTracks.length > 0) {
-        await PlaybackEngine.playTracks(unmutedTracks);
+        await PlaybackEngine.playTracks(unmutedTracks, currentTime);
         setIsPlaying(true);
       } else {
         toast({

@@ -22,7 +22,7 @@ export class PlaybackEngineService {
     }
   }
 
-  async playTracks(tracks: AudioTrack[]): Promise<void> {
+  async playTracks(tracks: AudioTrack[], currentTimelinePosition: number = 0): Promise<void> {
     await this.initialize();
     
     if (this.isPlaying) {
@@ -35,18 +35,37 @@ export class PlaybackEngineService {
     this.isPlaying = true;
     this.startTime = this.audioContext!.currentTime;
 
+    // Schedule tracks based on their timeline positions
     for (const track of validTracks) {
-      await this.playTrack(track, this.pauseTime);
+      await this.playTrackWithTiming(track, currentTimelinePosition);
     }
 
     this.startTimeUpdate();
   }
 
-  async playTrack(track: AudioTrack, offset: number = 0): Promise<void> {
+  async playTrackWithTiming(track: AudioTrack, currentTimelinePosition: number): Promise<void> {
     if (!this.audioContext || !track.audioData) return;
 
     try {
       const audioBuffer = await this.base64ToAudioBuffer(track.audioData);
+      
+      // Calculate timing based on track position and current timeline position
+      const trackStartTime = track.startTime || 0;
+      const trimStart = track.trimStart || 0;
+      const trimEnd = track.trimEnd || track.duration;
+      
+      // Check if the track should be playing at the current timeline position
+      if (currentTimelinePosition < trackStartTime || currentTimelinePosition >= trackStartTime + (trimEnd - trimStart)) {
+        // Track shouldn't be playing at this timeline position
+        return;
+      }
+      
+      // Calculate how far into the track we should start playing
+      const offsetIntoTrack = Math.max(0, currentTimelinePosition - trackStartTime);
+      const actualAudioOffset = trimStart + offsetIntoTrack;
+      
+      // Only play if there's audio left to play
+      if (actualAudioOffset >= trimEnd) return;
       
       const source = this.audioContext.createBufferSource();
       source.buffer = audioBuffer;
@@ -57,7 +76,9 @@ export class PlaybackEngineService {
       source.connect(trackGain);
       trackGain.connect(this.masterGainNode!);
 
-      source.start(0, offset);
+      // Start playing from the calculated offset
+      const duration = trimEnd - actualAudioOffset;
+      source.start(0, actualAudioOffset, duration);
       this.playingSources.set(track.id, source);
 
       source.onended = () => {
@@ -70,6 +91,11 @@ export class PlaybackEngineService {
     } catch (error) {
       console.error(`Failed to play track ${track.name}:`, error);
     }
+  }
+
+  async playTrack(track: AudioTrack, offset: number = 0): Promise<void> {
+    // Legacy method for backward compatibility
+    return this.playTrackWithTiming(track, offset);
   }
 
   pause(): void {
