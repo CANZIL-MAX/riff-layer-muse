@@ -411,10 +411,76 @@ export function RecordingStudio() {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // File validation
+    const maxFileSize = 50 * 1024 * 1024; // 50MB
+    const allowedExtensions = ['.wav', '.mp3', '.aiff', '.m4a', '.ogg'];
+    const allowedMimeTypes = [
+      'audio/wav', 'audio/wave', 'audio/x-wav',
+      'audio/mp3', 'audio/mpeg', 'audio/mp4',
+      'audio/aiff', 'audio/x-aiff',
+      'audio/m4a', 'audio/ogg'
+    ];
+
+    console.log('File upload started:', {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      sizeInMB: (file.size / (1024 * 1024)).toFixed(2)
+    });
+
+    // Check file size
+    if (file.size > maxFileSize) {
+      toast({
+        title: "File too large",
+        description: `File size must be under 50MB. Your file is ${(file.size / (1024 * 1024)).toFixed(1)}MB.`,
+        variant: "destructive",
+      });
+      event.target.value = '';
+      return;
+    }
+
+    // Check file extension
+    const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+    if (!allowedExtensions.includes(fileExtension)) {
+      toast({
+        title: "Unsupported file type",
+        description: `Please upload WAV, MP3, AIFF, M4A, or OGG files. Found: ${fileExtension}`,
+        variant: "destructive",
+      });
+      event.target.value = '';
+      return;
+    }
+
+    // Check MIME type if available
+    if (file.type && !allowedMimeTypes.includes(file.type)) {
+      console.warn('MIME type not in allowed list:', file.type);
+    }
+
     try {
+      // Show loading toast
+      const loadingToast = toast({
+        title: "Processing audio file...",
+        description: `Processing "${file.name}"`,
+      });
+
       await initAudioContext();
+      
+      console.log('Reading file as array buffer...');
       const arrayBuffer = await file.arrayBuffer();
-      const audioBuffer = await audioContextRef.current!.decodeAudioData(arrayBuffer);
+      
+      console.log('Decoding audio data...', {
+        bufferSize: arrayBuffer.byteLength,
+        audioContextState: audioContextRef.current?.state
+      });
+      
+      const audioBuffer = await audioContextRef.current!.decodeAudioData(arrayBuffer.slice(0));
+      
+      console.log('Audio decoded successfully:', {
+        duration: audioBuffer.duration,
+        sampleRate: audioBuffer.sampleRate,
+        numberOfChannels: audioBuffer.numberOfChannels,
+        length: audioBuffer.length
+      });
       
       // Convert to WAV format and then to base64
       const wavBuffer = AudioMixer.audioBufferToWav(audioBuffer);
@@ -446,14 +512,39 @@ export function RecordingStudio() {
       }
       
       toast({
-        title: "File uploaded!",
-        description: `"${newTrack.name}" added to your project.`,
+        title: "File uploaded successfully!",
+        description: `"${newTrack.name}" (${audioBuffer.duration.toFixed(1)}s) added to your project.`,
       });
+      
+      console.log('File upload completed successfully');
+      
     } catch (error) {
-      console.error('Error uploading file:', error);
+      console.error('Detailed error uploading file:', {
+        error,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        errorStack: error instanceof Error ? error.stack : undefined
+      });
+      
+      let errorMessage = "Could not process the audio file.";
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Unable to decode audio data')) {
+          errorMessage = "Audio format not supported or file is corrupted.";
+        } else if (error.message.includes('quota')) {
+          errorMessage = "Not enough storage space available.";
+        } else if (error.message.includes('network')) {
+          errorMessage = "Network error occurred during upload.";
+        } else if (error.name === 'EncodingError') {
+          errorMessage = "Audio file encoding is not supported.";
+        }
+      }
+      
       toast({
         title: "Upload failed",
-        description: "Could not process the audio file.",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -758,9 +849,10 @@ export function RecordingStudio() {
                 <div className="relative">
                   <input
                     type="file"
-                    accept="audio/*"
+                    accept="audio/wav,audio/mp3,audio/mpeg,audio/aiff,audio/x-aiff,audio/m4a,audio/ogg"
                     onChange={handleFileUpload}
                     className="absolute inset-0 opacity-0 cursor-pointer"
+                    title="Upload WAV, MP3, AIFF, M4A, or OGG audio files (max 50MB)"
                   />
                   <Button variant="outline">
                     <Upload className="w-4 h-4 mr-2" />
