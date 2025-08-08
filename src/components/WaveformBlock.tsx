@@ -92,7 +92,14 @@ export function WaveformBlock({
     e.preventDefault();
     e.stopPropagation();
 
-    const startX = e.clientX;
+    // Get the timeline container to calculate proper coordinates
+    const timelineElement = e.currentTarget.closest('[data-timeline]') || 
+                           e.currentTarget.closest('.relative.bg-timeline\\/30') ||
+                           document.querySelector('[data-timeline]');
+    
+    const timelineRect = timelineElement?.getBoundingClientRect();
+    const startX = timelineRect ? e.clientX - timelineRect.left + (scrollOffset || 0) : e.clientX;
+    
     const initialStartTime = startTime;
     const initialTrimStart = trimStart;
     const initialTrimEnd = trimEnd;
@@ -106,7 +113,9 @@ export function WaveformBlock({
     }
 
     const handleMouseMove = (e: MouseEvent) => {
-      const deltaX = e.clientX - startX;
+      // Calculate mouse position relative to timeline with scroll offset
+      const currentX = timelineRect ? e.clientX - timelineRect.left + (scrollOffset || 0) : e.clientX;
+      const deltaX = currentX - startX;
       const deltaTime = pixelsToTime(deltaX);
 
       if (action === 'drag') {

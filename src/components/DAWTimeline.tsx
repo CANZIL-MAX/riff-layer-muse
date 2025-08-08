@@ -202,6 +202,7 @@ export function DAWTimeline({
             >
               <div 
                 ref={timelineRef}
+                data-timeline
                 className="relative bg-timeline/30 cursor-pointer min-h-[200px]"
                 style={{ width: `${zoomedWidth}px` }}
                 onClick={handleTimelineClick}
