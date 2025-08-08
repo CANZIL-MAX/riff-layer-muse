@@ -115,20 +115,6 @@ export function Timeline({
             style={{ width: `${timelineWidth}px` }}
             onClick={handleTimelineClick}
           >
-            {/* Time markers */}
-            {timeMarkers.map((time) => (
-              <div
-                key={time}
-                className="absolute top-0 h-full flex flex-col justify-between pointer-events-none"
-                style={{ left: `${timeToPixels(time, timelineWidth)}px` }}
-              >
-                <div className="w-px h-full bg-border"></div>
-                <span className="text-xs text-muted-foreground -translate-x-1/2 mt-1">
-                  {formatTime(time)}
-                </span>
-              </div>
-            ))}
-
             {/* Current playback position */}
             <div
               className="absolute top-0 w-0.5 h-full bg-primary z-20 pointer-events-none"

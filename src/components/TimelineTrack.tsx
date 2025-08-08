@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { AudioTrack } from '@/services/ProjectManager';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Volume2, VolumeX, Trash2, Edit3 } from 'lucide-react';
+import { TrashIcon, VolumeXIcon, Volume2Icon, Edit3 } from 'lucide-react';
+import { AudioTrack, ProjectManager } from '@/services/ProjectManager';
+import { WaveformDisplay } from './WaveformDisplay';
 
 interface TimelineTrackProps {
   track: AudioTrack;
@@ -15,25 +16,53 @@ interface TimelineTrackProps {
   width: number;
 }
 
-export function TimelineTrack({ 
-  track, 
-  index, 
-  totalDuration, 
-  timeToPixels, 
-  onToggleMute, 
+export function TimelineTrack({
+  track,
+  index,
+  totalDuration,
+  timeToPixels,
+  onToggleMute,
   onRemove,
   onUpdateTrackName,
-  width 
+  width
 }: TimelineTrackProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState(track.name);
-  const trackWidth = timeToPixels(track.duration || 0, width);
-  const trackOffset = 0; // For now, all tracks start at 0
+  const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  useEffect(() => {
+    const loadAudioBuffer = async () => {
+      if (track.audioData && !audioBuffer) {
+        try {
+          if (!audioContextRef.current) {
+            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+          }
+          
+          if (audioContextRef.current.state === 'suspended') {
+            await audioContextRef.current.resume();
+          }
+          
+          const buffer = await ProjectManager.base64ToAudioBuffer(track.audioData, audioContextRef.current);
+          setAudioBuffer(buffer);
+        } catch (error) {
+          console.error('Error loading audio buffer for timeline:', error);
+        }
+      }
+    };
+
+    loadAudioBuffer();
+  }, [track.audioData, audioBuffer]);
+
+  const trackWidthPixels = timeToPixels(track.duration, width);
+  const startPosition = timeToPixels(track.startTime || 0, width);
 
   return (
-    <div className="flex items-center gap-3 py-2 border-b border-border/50 group">
-      {/* Track Controls */}
-      <div className="flex items-center gap-2 w-32 flex-shrink-0">
+    <div className="flex items-center gap-3 h-12 group">
+      {/* Track controls */}
+      <div className="flex items-center gap-2 min-w-[200px]">
+        <span className="text-xs text-muted-foreground w-6">{index + 1}</span>
+        
         {isEditingName ? (
           <Input
             value={editName}
@@ -52,57 +81,79 @@ export function TimelineTrack({
                 setEditName(track.name);
               }
             }}
-            className="h-6 text-xs w-16"
+            className="h-6 text-xs flex-1"
             autoFocus
           />
         ) : (
           <div 
-            className="flex items-center gap-1 cursor-pointer hover:bg-muted/50 rounded px-1 py-0.5 transition-colors w-16"
+            className="flex items-center gap-1 cursor-pointer hover:bg-muted/50 rounded px-1 py-0.5 transition-colors flex-1"
             onClick={() => setIsEditingName(true)}
           >
-            <span className="text-sm font-medium truncate">
-              {track.name}
-            </span>
-            <Edit3 className="w-2 h-2 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+            <span className="text-xs font-medium text-foreground truncate">{track.name}</span>
+            <Edit3 className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
           </div>
         )}
+
         <Button
-          size="sm"
           variant="ghost"
+          size="sm"
           onClick={() => onToggleMute(track.id)}
-          className={`w-6 h-6 p-0 ${track.isMuted ? 'text-muted-foreground' : 'text-primary'}`}
+          className={`h-6 w-6 p-0 ${track.isMuted ? "text-destructive" : "text-muted-foreground"}`}
         >
-          {track.isMuted ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+          {track.isMuted ? (
+            <VolumeXIcon className="w-3 h-3" />
+          ) : (
+            <Volume2Icon className="w-3 h-3" />
+          )}
         </Button>
+        
         <Button
-          size="sm"
           variant="ghost"
+          size="sm"
           onClick={() => onRemove(track.id)}
-          className="w-6 h-6 p-0 text-destructive hover:text-destructive"
+          className="h-6 w-6 p-0 text-destructive hover:text-destructive-foreground hover:bg-destructive opacity-0 group-hover:opacity-100 transition-opacity"
         >
-          <Trash2 className="w-3 h-3" />
+          <TrashIcon className="w-3 h-3" />
         </Button>
       </div>
 
-      {/* Track Visualization */}
-      <div className="flex-1 relative bg-muted/30 rounded h-12 overflow-hidden">
-        {/* Track waveform placeholder */}
+      {/* Track visualization */}
+      <div className="flex-1 relative">
         <div 
-          className={`h-full rounded transition-all duration-200 ${
-            track.isMuted 
-              ? 'bg-muted-foreground/20' 
-              : `bg-gradient-to-r from-primary/60 to-primary/40`
-          }`}
-          style={{ 
-            width: `${Math.min(trackWidth, width)}px`,
-            marginLeft: `${trackOffset}px`
-          }}
+          className="h-10 rounded border border-border/50 overflow-hidden relative bg-muted/30"
+          style={{ width: `${width}px` }}
         >
-          {/* Waveform visualization would go here */}
-          <div className="w-full h-full bg-gradient-to-t from-black/10 to-transparent flex items-center justify-center">
-            <span className="text-xs text-foreground/60 font-mono">
-              {Math.round((track.duration || 0) * 10) / 10}s
-            </span>
+          {/* Empty space before track starts */}
+          {startPosition > 0 && (
+            <div 
+              className="h-full bg-muted/20"
+              style={{ width: `${startPosition}px` }}
+            />
+          )}
+          
+          {/* Waveform or track representation */}
+          <div
+            className="h-full"
+            style={{ 
+              width: `${trackWidthPixels}px`,
+              marginLeft: `${startPosition}px`
+            }}
+          >
+            {audioBuffer ? (
+              <WaveformDisplay
+                audioBuffer={audioBuffer}
+                isPlaying={false}
+                isMuted={track.isMuted}
+                currentTime={0}
+                height={40}
+              />
+            ) : (
+              <div className={`h-full transition-colors ${
+                track.isMuted 
+                  ? 'bg-muted-foreground/50' 
+                  : 'bg-primary/70 hover:bg-primary/80'
+              }`} />
+            )}
           </div>
         </div>
       </div>

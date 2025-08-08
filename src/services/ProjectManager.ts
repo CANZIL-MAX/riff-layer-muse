@@ -16,6 +16,7 @@ export interface AudioTrack {
   isMuted: boolean;
   volume: number;
   duration: number;
+  startTime?: number; // Time when recording started on timeline
 }
 
 export interface Project {
@@ -242,14 +243,19 @@ class ProjectManagerService {
   }
 
   // Convert base64 back to AudioBuffer
-  async base64ToAudioBuffer(base64Data: string, audioContext: AudioContext): Promise<AudioBuffer> {
-    const binaryString = atob(base64Data);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
+  static async base64ToAudioBuffer(base64Data: string, audioContext: AudioContext): Promise<AudioBuffer> {
+    try {
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      return await audioContext.decodeAudioData(bytes.buffer);
+    } catch (error) {
+      console.error('Error decoding audio data:', error);
+      throw new Error('Failed to decode audio data');
     }
-    
-    return await audioContext.decodeAudioData(bytes.buffer);
   }
 
   // Create a new empty project
