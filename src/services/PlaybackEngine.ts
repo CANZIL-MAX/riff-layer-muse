@@ -25,21 +25,43 @@ export class PlaybackEngineService {
   async playTracks(tracks: AudioTrack[], currentTimelinePosition: number = 0): Promise<void> {
     await this.initialize();
     
+    console.log('PlayTracks called with:', {
+      trackCount: tracks.length,
+      currentTimelinePosition,
+      trackDetails: tracks.map(t => ({
+        id: t.id,
+        name: t.name,
+        startTime: t.startTime,
+        trimStart: t.trimStart,
+        trimEnd: t.trimEnd,
+        duration: t.duration,
+        isMuted: t.isMuted,
+        hasAudioData: !!t.audioData
+      }))
+    });
+    
     if (this.isPlaying) {
       this.stop();
     }
 
     const validTracks = tracks.filter(track => track.audioData && !track.isMuted);
-    if (validTracks.length === 0) return;
+    console.log('Valid tracks after filtering:', validTracks.length);
+    
+    if (validTracks.length === 0) {
+      console.log('No valid tracks to play');
+      return;
+    }
 
     this.isPlaying = true;
     this.startTime = this.audioContext!.currentTime;
 
     // Schedule tracks based on their timeline positions
     for (const track of validTracks) {
+      console.log(`Attempting to play track: ${track.name}`);
       await this.playTrackWithTiming(track, currentTimelinePosition);
     }
 
+    console.log('Started time update');
     this.startTimeUpdate();
   }
 
@@ -63,19 +85,39 @@ export class PlaybackEngineService {
       const trimEnd = track.trimEnd || track.duration;
       
       // Check if the track should be playing at the current timeline position
-      if (currentTimelinePosition < trackStartTime || currentTimelinePosition >= trackStartTime + (trimEnd - trimStart)) {
+      // SIMPLER LOGIC: If we're playing from start (currentTimelinePosition = 0), play all tracks from their positions
+      if (currentTimelinePosition === 0) {
+        console.log(`Track ${track.name} PLAYING from start - no time filtering`);
+      } else if (currentTimelinePosition < trackStartTime || currentTimelinePosition >= trackStartTime + (trimEnd - trimStart)) {
         // Track shouldn't be playing at this timeline position
-        console.log(`Track ${track.name} not playing - outside time range`, {
+        console.log(`Track ${track.name} SKIPPED - outside time range`, {
           currentTimelinePosition,
           trackStartTime,
-          trackEndTime: trackStartTime + (trimEnd - trimStart)
+          trackEndTime: trackStartTime + (trimEnd - trimStart),
+          reason: currentTimelinePosition < trackStartTime ? 'before start' : 'after end'
         });
         return;
+      } else {
+        console.log(`Track ${track.name} SHOULD PLAY - in time range`);
       }
       
       // Calculate how far into the track we should start playing
-      const offsetIntoTrack = Math.max(0, currentTimelinePosition - trackStartTime);
-      const actualAudioOffset = trimStart + offsetIntoTrack;
+      let offsetIntoTrack = 0;
+      let actualAudioOffset = trimStart;
+      
+      if (currentTimelinePosition > trackStartTime) {
+        offsetIntoTrack = currentTimelinePosition - trackStartTime;
+        actualAudioOffset = trimStart + offsetIntoTrack;
+      }
+      
+      console.log(`Offset calculations:`, {
+        trackStartTime,
+        currentTimelinePosition,
+        offsetIntoTrack,
+        actualAudioOffset,
+        trimStart,
+        trimEnd
+      });
       
       // Only play if there's audio left to play
       if (actualAudioOffset >= trimEnd) {
@@ -94,9 +136,16 @@ export class PlaybackEngineService {
 
       // Start playing from the calculated offset
       const duration = trimEnd - actualAudioOffset;
-      console.log(`Starting track ${track.name}:`, { actualAudioOffset, duration, trimStart, trimEnd });
+      console.log(`STARTING AUDIO for track ${track.name}:`, { 
+        actualAudioOffset, 
+        duration, 
+        trimStart, 
+        trimEnd,
+        audioBufferDuration: audioBuffer.duration
+      });
       source.start(0, actualAudioOffset, duration);
       this.playingSources.set(track.id, source);
+      console.log(`Track ${track.name} added to playing sources. Total playing: ${this.playingSources.size}`);
 
       source.onended = () => {
         this.playingSources.delete(track.id);
