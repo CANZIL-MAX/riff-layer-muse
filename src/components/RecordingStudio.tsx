@@ -688,10 +688,38 @@ export function RecordingStudio() {
           onRemoveTrack={removeTrack}
           onUpdateTrackName={updateTrackName}
           onTrackUpdate={(trackId, updates) => {
-            const updatedTracks = tracks.map(track => 
-              track.id === trackId ? { ...track, ...updates } : track
-            );
+            console.log('Track update called:', trackId, updates);
+            
+            const updatedTracks = tracks.map(track => {
+              if (track.id === trackId) {
+                // Preserve the original audio data and other critical properties
+                const updatedTrack = { 
+                  ...track, 
+                  ...updates,
+                  // Ensure we don't accidentally overwrite critical data
+                  audioData: updates.audioData || track.audioData,
+                  duration: updates.duration || track.duration,
+                  volume: updates.volume !== undefined ? updates.volume : track.volume
+                };
+                console.log('Updated track:', updatedTrack);
+                return updatedTrack;
+              }
+              return track;
+            });
+            
+            console.log('All updated tracks:', updatedTracks);
             setTracks(updatedTracks);
+            
+            // Auto-save the project
+            if (currentProject) {
+              const updatedProject = {
+                ...currentProject,
+                tracks: updatedTracks,
+                lastModified: new Date().toISOString()
+              };
+              ProjectManager.saveProject(updatedProject);
+              setCurrentProject(updatedProject);
+            }
           }}
         />
 

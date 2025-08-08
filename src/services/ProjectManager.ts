@@ -249,7 +249,17 @@ class ProjectManagerService {
   // Convert base64 back to AudioBuffer
   async base64ToAudioBuffer(base64Data: string, audioContext: AudioContext): Promise<AudioBuffer> {
     try {
-      const binaryString = atob(base64Data);
+      console.log('Decoding audio data, length:', base64Data.length);
+      
+      // Handle different data URL formats
+      let cleanBase64 = base64Data;
+      if (base64Data.includes(',')) {
+        cleanBase64 = base64Data.split(',')[1];
+      }
+      
+      console.log('Clean base64 length:', cleanBase64.length);
+      
+      const binaryString = atob(cleanBase64);
       const bytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) {
         bytes[i] = binaryString.charCodeAt(i);

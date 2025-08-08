@@ -31,6 +31,8 @@ export function WaveformBlock({
     const loadAudioBuffer = async () => {
       if (track.audioData && !audioBuffer) {
         try {
+          console.log('Loading audio buffer for track:', track.id, 'data length:', track.audioData.length);
+          
           if (!audioContextRef.current) {
             audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
           }
@@ -39,9 +41,15 @@ export function WaveformBlock({
             await audioContextRef.current.resume();
           }
           
-          // Extract base64 from data URL
-          const base64Data = track.audioData.split(',')[1] || track.audioData;
-          const binaryString = atob(base64Data);
+          // Use a more robust approach to extract base64 data
+          let cleanBase64 = track.audioData;
+          if (track.audioData.includes(',')) {
+            cleanBase64 = track.audioData.split(',')[1];
+          }
+          
+          console.log('Clean base64 length:', cleanBase64.length);
+          
+          const binaryString = atob(cleanBase64);
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
@@ -49,8 +57,10 @@ export function WaveformBlock({
           
           const buffer = await audioContextRef.current.decodeAudioData(bytes.buffer);
           setAudioBuffer(buffer);
+          console.log('Audio buffer loaded successfully for track:', track.id);
         } catch (error) {
           console.error('Error loading audio buffer for waveform block:', error);
+          console.error('Track audio data preview:', track.audioData.substring(0, 100));
         }
       }
     };

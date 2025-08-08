@@ -46,6 +46,14 @@ export class PlaybackEngineService {
   async playTrackWithTiming(track: AudioTrack, currentTimelinePosition: number): Promise<void> {
     if (!this.audioContext || !track.audioData) return;
 
+    console.log(`Playing track ${track.name}:`, {
+      trackStartTime: track.startTime,
+      currentTimelinePosition,
+      trimStart: track.trimStart,
+      trimEnd: track.trimEnd,
+      duration: track.duration
+    });
+
     try {
       const audioBuffer = await this.base64ToAudioBuffer(track.audioData);
       
@@ -57,6 +65,11 @@ export class PlaybackEngineService {
       // Check if the track should be playing at the current timeline position
       if (currentTimelinePosition < trackStartTime || currentTimelinePosition >= trackStartTime + (trimEnd - trimStart)) {
         // Track shouldn't be playing at this timeline position
+        console.log(`Track ${track.name} not playing - outside time range`, {
+          currentTimelinePosition,
+          trackStartTime,
+          trackEndTime: trackStartTime + (trimEnd - trimStart)
+        });
         return;
       }
       
@@ -65,7 +78,10 @@ export class PlaybackEngineService {
       const actualAudioOffset = trimStart + offsetIntoTrack;
       
       // Only play if there's audio left to play
-      if (actualAudioOffset >= trimEnd) return;
+      if (actualAudioOffset >= trimEnd) {
+        console.log(`Track ${track.name} - no audio left to play`, { actualAudioOffset, trimEnd });
+        return;
+      }
       
       const source = this.audioContext.createBufferSource();
       source.buffer = audioBuffer;
@@ -78,6 +94,7 @@ export class PlaybackEngineService {
 
       // Start playing from the calculated offset
       const duration = trimEnd - actualAudioOffset;
+      console.log(`Starting track ${track.name}:`, { actualAudioOffset, duration, trimStart, trimEnd });
       source.start(0, actualAudioOffset, duration);
       this.playingSources.set(track.id, source);
 
