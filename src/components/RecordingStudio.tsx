@@ -467,7 +467,7 @@ export function RecordingStudio() {
         if (isMetronomeEnabled) {
           await MetronomeEngine.start();
         }
-        await PlaybackEngine.playTracks(unmutedTracks, 0);
+        await PlaybackEngine.playTracks(unmutedTracks, currentTime);
         setIsPlaying(true);
       } else {
         toast({
