@@ -15,7 +15,8 @@ import { Card } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Toaster } from '@/components/ui/toaster';
 import { useToast } from '@/hooks/use-toast';
-import { Mic, Play, Pause, Square, Upload, Save, Download, FolderOpen, Volume2 } from 'lucide-react';
+import { Mic, Play, Pause, Square, Upload, Save, Download, FolderOpen, Volume2, Eye, EyeOff, ChevronDown } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Project, AudioTrack } from '@/services/ProjectManager';
 
 export function RecordingStudio() {
@@ -38,6 +39,7 @@ export function RecordingStudio() {
   const [metronomeVolume, setMetronomeVolume] = useState(0.5);
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [showCountIn, setShowCountIn] = useState(true);
+  const [showAudioLayers, setShowAudioLayers] = useState(true);
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -877,29 +879,59 @@ export function RecordingStudio() {
         {/* Audio Layers */}
         <Card className="p-6">
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Audio Layers</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Audio Layers</h3>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 px-2">
+                    {showAudioLayers ? <Eye className="w-4 h-4 mr-1" /> : <EyeOff className="w-4 h-4 mr-1" />}
+                    <ChevronDown className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem 
+                    onClick={() => setShowAudioLayers(true)}
+                    className={showAudioLayers ? "bg-accent" : ""}
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    Show Audio Layers
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => setShowAudioLayers(false)}
+                    className={!showAudioLayers ? "bg-accent" : ""}
+                  >
+                    <EyeOff className="w-4 h-4 mr-2" />
+                    Hide Audio Layers
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
             
-            {tracks.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Mic className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>No audio tracks yet</p>
-                <p className="text-sm">Record or upload audio to get started</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {tracks.map((track, index) => (
-                  <AudioLayer
-                    key={track.id}
-                    track={track}
-                    index={index}
-                    isPlaying={isPlaying}
-                    currentTime={currentTime}
-                    onToggleMute={memoizedCallbacks.toggleTrackMute}
-                    onRemove={memoizedCallbacks.removeTrack}
-                    onUpdateTrackName={memoizedCallbacks.updateTrackName}
-                  />
-                ))}
-              </div>
+            {showAudioLayers && (
+              <>
+                {tracks.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Mic className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No audio tracks yet</p>
+                    <p className="text-sm">Record or upload audio to get started</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {tracks.map((track, index) => (
+                      <AudioLayer
+                        key={track.id}
+                        track={track}
+                        index={index}
+                        isPlaying={isPlaying}
+                        currentTime={currentTime}
+                        onToggleMute={memoizedCallbacks.toggleTrackMute}
+                        onRemove={memoizedCallbacks.removeTrack}
+                        onUpdateTrackName={memoizedCallbacks.updateTrackName}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </Card>
