@@ -100,6 +100,14 @@ export function RecordingStudio() {
   };
 
   const startRecording = async () => {
+    await startRecordingWithOptions(false);
+  };
+
+  const startRecordingWithPlayback = async () => {
+    await startRecordingWithOptions(true);
+  };
+
+  const startRecordingWithOptions = async (withPlayback: boolean) => {
     try {
       // Get user media
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -113,11 +121,16 @@ export function RecordingStudio() {
       
       streamRef.current = stream;
 
-      // Start playing existing tracks if any exist
-      const unmutedTracks = tracks.filter(track => !track.isMuted && track.audioData);
-      if (unmutedTracks.length > 0) {
-        await PlaybackEngine.playTracks(unmutedTracks);
-        setIsPlaying(true);
+      let unmutedTracksCount = 0;
+
+      // Start playing existing tracks if withPlayback is true and tracks exist
+      if (withPlayback) {
+        const unmutedTracks = tracks.filter(track => !track.isMuted && track.audioData);
+        unmutedTracksCount = unmutedTracks.length;
+        if (unmutedTracks.length > 0) {
+          await PlaybackEngine.playTracks(unmutedTracks);
+          setIsPlaying(true);
+        }
       }
 
       // Create MediaRecorder with proper options
@@ -147,8 +160,8 @@ export function RecordingStudio() {
       
       toast({
         title: "Recording Started",
-        description: unmutedTracks.length > 0 
-          ? `Recording with ${unmutedTracks.length} track(s) playing`
+        description: unmutedTracksCount > 0 
+          ? `Recording with ${unmutedTracksCount} track(s) playing`
           : "Recording audio...",
       });
     } catch (error) {
@@ -505,6 +518,18 @@ export function RecordingStudio() {
                     </>
                   )}
                 </Button>
+                
+                {tracks.length > 0 && !isRecording && (
+                  <Button
+                    variant="secondary"
+                    onClick={startRecordingWithPlayback}
+                    className="bg-gradient-to-r from-primary to-primary-glow"
+                  >
+                    <Mic className="w-4 h-4 mr-1" />
+                    <Play className="w-4 h-4 mr-2" />
+                    Record + Play
+                  </Button>
+                )}
               </div>
 
               <div className="flex gap-2">
