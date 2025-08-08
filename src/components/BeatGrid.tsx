@@ -1,5 +1,3 @@
-import { MetronomeEngine } from '@/services/MetronomeService';
-
 interface BeatGridProps {
   timelineWidth: number;
   totalDuration: number;
