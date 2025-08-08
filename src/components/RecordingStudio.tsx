@@ -222,6 +222,9 @@ export function RecordingStudio() {
 
   const startRecordingWithOptions = async (withPlayback: boolean) => {
     try {
+      // Set recording start time to current timeline position
+      setRecordingStartTime(currentTime);
+      
       // Play count-in if enabled
       if (showCountIn && isMetronomeEnabled) {
         toast({
@@ -364,7 +367,7 @@ export function RecordingStudio() {
               isMuted: false,
               volume: 1,
               duration: audioBuffer.duration,
-              startTime: currentTime, // Track when recording started on timeline
+              startTime: recordingStartTime, // Track when recording started on timeline
             };
 
             // Add track to current tracks
