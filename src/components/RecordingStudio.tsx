@@ -364,7 +364,7 @@ export function RecordingStudio() {
               isMuted: false,
               volume: 1,
               duration: audioBuffer.duration,
-              startTime: recordingStartTime, // Track when recording started on timeline
+              startTime: currentTime, // Track when recording started on timeline
             };
 
             // Add track to current tracks
