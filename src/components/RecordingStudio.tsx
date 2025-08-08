@@ -687,7 +687,7 @@ export function RecordingStudio() {
           }}
           onRemoveTrack={removeTrack}
           onUpdateTrackName={updateTrackName}
-          onTrackUpdate={(trackId, updates) => {
+          onTrackUpdate={async (trackId, updates) => {
             console.log('Track update called:', trackId, updates);
             
             const updatedTracks = tracks.map(track => {
@@ -709,6 +709,16 @@ export function RecordingStudio() {
             
             console.log('All updated tracks:', updatedTracks);
             setTracks(updatedTracks);
+            
+            // If we're currently playing, restart playback with new positions
+            if (isPlaying) {
+              console.log('Restarting playback due to track update');
+              PlaybackEngine.stop();
+              const unmutedTracks = updatedTracks.filter(track => !track.isMuted && track.audioData);
+              if (unmutedTracks.length > 0) {
+                await PlaybackEngine.playTracks(unmutedTracks, currentTime);
+              }
+            }
             
             // Auto-save the project
             if (currentProject) {
