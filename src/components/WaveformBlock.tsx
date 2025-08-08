@@ -93,7 +93,7 @@ export function WaveformBlock({
     const timelineRect = timelineElement?.getBoundingClientRect();
     
     // Calculate initial position relative to the timeline, accounting for scroll
-    const startX = e.clientX - (timelineRect?.left || 0);
+    const startX = e.clientX - (timelineRect?.left || 0) + scrollOffset;
     
     const initialStartTime = startTime;
     const initialTrimStart = trimStart;
@@ -108,8 +108,8 @@ export function WaveformBlock({
     }
 
     const handleMouseMove = (e: MouseEvent) => {
-      // Calculate current mouse position relative to timeline
-      const currentX = e.clientX - (timelineRect?.left || 0);
+      // Calculate current mouse position relative to timeline, accounting for scroll
+      const currentX = e.clientX - (timelineRect?.left || 0) + scrollOffset;
       const deltaX = currentX - startX;
       const deltaTime = pixelsToTime(deltaX);
 
