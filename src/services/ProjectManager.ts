@@ -32,6 +32,11 @@ export interface Project {
   settings: {
     masterVolume: number;
     tempo: number;
+    timeSignature?: { numerator: number; denominator: number };
+    metronomeEnabled?: boolean;
+    metronomeVolume?: number;
+    snapToGrid?: boolean;
+    gridSubdivision?: number;
   };
 }
 
@@ -282,7 +287,12 @@ class ProjectManagerService {
       tracks: [],
       settings: {
         masterVolume: 1,
-        tempo: 120
+        tempo: 120,
+        timeSignature: { numerator: 4, denominator: 4 },
+        metronomeEnabled: false,
+        metronomeVolume: 0.5,
+        snapToGrid: true,
+        gridSubdivision: 4
       }
     };
   }

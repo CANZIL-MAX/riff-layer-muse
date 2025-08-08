@@ -2,10 +2,13 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { ProjectManager } from '@/services/ProjectManager';
 import { AudioMixer } from '@/components/AudioMixer';
 import { PlaybackEngine } from '@/services/PlaybackEngine';
+import { MetronomeEngine } from '@/services/MetronomeService';
 import { ProjectSelector } from '@/components/ProjectSelector';
 import { AudioLayer } from '@/components/AudioLayer';
 import { DAWTimeline } from '@/components/DAWTimeline';
 import { DeviceSelector } from '@/components/DeviceSelector';
+import { MetronomeControls } from '@/components/MetronomeControls';
+import { QuantizeDialog } from '@/components/QuantizeDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -28,6 +31,13 @@ export function RecordingStudio() {
   const [recordingStartTime, setRecordingStartTime] = useState(0);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   
+  // Metronome and timing states
+  const [bpm, setBpm] = useState(120);
+  const [isMetronomeEnabled, setIsMetronomeEnabled] = useState(false);
+  const [metronomeVolume, setMetronomeVolume] = useState(0.5);
+  const [snapToGrid, setSnapToGrid] = useState(true);
+  const [showCountIn, setShowCountIn] = useState(true);
+  
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
@@ -43,9 +53,20 @@ export function RecordingStudio() {
         // Set up time update callback
         PlaybackEngine.setOnTimeUpdate(setCurrentTime);
         
+        // Initialize metronome
+        await MetronomeEngine.initialize();
+        
         const defaultProject = ProjectManager.createNewProject('My First Project');
         setCurrentProject(defaultProject);
         setProjectName(defaultProject.name);
+        
+        // Load project settings
+        if (defaultProject.settings) {
+          setBpm(defaultProject.settings.tempo || 120);
+          setIsMetronomeEnabled(defaultProject.settings.metronomeEnabled || false);
+          setMetronomeVolume(defaultProject.settings.metronomeVolume || 0.5);
+          setSnapToGrid(defaultProject.settings.snapToGrid !== false);
+        }
       } catch (error) {
         console.error('Failed to initialize project:', error);
         toast({
@@ -63,6 +84,14 @@ export function RecordingStudio() {
     if (currentProject) {
       setTracks(currentProject.tracks);
       setProjectName(currentProject.name);
+      
+      // Load project settings
+      if (currentProject.settings) {
+        setBpm(currentProject.settings.tempo || 120);
+        setIsMetronomeEnabled(currentProject.settings.metronomeEnabled || false);
+        setMetronomeVolume(currentProject.settings.metronomeVolume || 0.5);
+        setSnapToGrid(currentProject.settings.snapToGrid !== false);
+      }
     }
   }, [currentProject]);
 
@@ -83,7 +112,14 @@ export function RecordingStudio() {
         ...currentProject,
         name: projectName,
         lastModified: new Date().toISOString(),
-        tracks
+        tracks,
+        settings: {
+          ...currentProject.settings,
+          tempo: bpm,
+          metronomeEnabled: isMetronomeEnabled,
+          metronomeVolume: metronomeVolume,
+          snapToGrid: snapToGrid,
+        }
       };
 
       await ProjectManager.saveProject(updatedProject);
@@ -118,6 +154,15 @@ export function RecordingStudio() {
 
   const startRecordingWithOptions = async (withPlayback: boolean) => {
     try {
+      // Play count-in if enabled
+      if (showCountIn && isMetronomeEnabled) {
+        toast({
+          title: "Count-in starting...",
+          description: "Recording will begin after count-in",
+        });
+        await MetronomeEngine.playCountIn(1);
+      }
+      
       // Get user media with selected device
       const constraints: MediaStreamConstraints = { 
         audio: {
@@ -135,6 +180,11 @@ export function RecordingStudio() {
 
       let unmutedTracksCount = 0;
 
+      // Start metronome if enabled
+      if (isMetronomeEnabled) {
+        await MetronomeEngine.start();
+      }
+      
       // Start playing existing tracks if withPlayback is true and tracks exist
       if (withPlayback) {
         const unmutedTracks = tracks.filter(track => !track.isMuted && track.audioData);
@@ -191,6 +241,9 @@ export function RecordingStudio() {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
 
+      // Stop metronome
+      MetronomeEngine.stop();
+      
       // Stop playback if it was running during recording
       if (isPlaying) {
         PlaybackEngine.stop();
@@ -339,10 +392,14 @@ export function RecordingStudio() {
   const togglePlayback = async () => {
     if (isPlaying) {
       PlaybackEngine.pause();
+      MetronomeEngine.stop();
       setIsPlaying(false);
     } else {
       const unmutedTracks = tracks.filter(track => !track.isMuted && track.audioData);
       if (unmutedTracks.length > 0) {
+        if (isMetronomeEnabled) {
+          await MetronomeEngine.start();
+        }
         await PlaybackEngine.playTracks(unmutedTracks, currentTime);
         setIsPlaying(true);
       } else {
@@ -356,6 +413,7 @@ export function RecordingStudio() {
 
   const stopPlayback = () => {
     PlaybackEngine.stop();
+    MetronomeEngine.stop();
     setIsPlaying(false);
     setCurrentTime(0);
   };
@@ -492,6 +550,34 @@ export function RecordingStudio() {
     }
   };
 
+  const handleQuantize = async (trackIds: string[], subdivision: number) => {
+    const updatedTracks = tracks.map(track => {
+      if (trackIds.includes(track.id) && track.startTime !== undefined) {
+        const snappedStartTime = MetronomeEngine.snapToNearestBeat(track.startTime, subdivision);
+        return { ...track, startTime: snappedStartTime };
+      }
+      return track;
+    });
+    
+    setTracks(updatedTracks);
+    
+    // Auto-save
+    if (currentProject) {
+      const updatedProject = {
+        ...currentProject,
+        tracks: updatedTracks,
+        lastModified: new Date().toISOString()
+      };
+      await ProjectManager.saveProject(updatedProject);
+      setCurrentProject(updatedProject);
+    }
+    
+    toast({
+      title: "Tracks quantized",
+      description: `${trackIds.length} track(s) aligned to the beat grid`,
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background p-4">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -528,8 +614,8 @@ export function RecordingStudio() {
           />
         )}
 
-        {/* Recording Setup */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Recording Setup and Metronome */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <DeviceSelector
             selectedDeviceId={selectedDeviceId}
             onDeviceChange={setSelectedDeviceId}
@@ -558,6 +644,15 @@ export function RecordingStudio() {
               </div>
             </div>
           </Card>
+          
+          <MetronomeControls
+            bpm={bpm}
+            onBpmChange={setBpm}
+            isMetronomeEnabled={isMetronomeEnabled}
+            onMetronomeToggle={() => setIsMetronomeEnabled(!isMetronomeEnabled)}
+            metronomeVolume={metronomeVolume}
+            onMetronomeVolumeChange={setMetronomeVolume}
+          />
         </div>
 
         {/* Transport Controls */}
@@ -637,6 +732,12 @@ export function RecordingStudio() {
                   <Download className="w-4 h-4 mr-2" />
                   Export
                 </Button>
+                
+                <QuantizeDialog
+                  tracks={tracks}
+                  bpm={bpm}
+                  onQuantize={handleQuantize}
+                />
               </div>
             </div>
 
@@ -687,6 +788,8 @@ export function RecordingStudio() {
           }}
           onRemoveTrack={removeTrack}
           onUpdateTrackName={updateTrackName}
+          bpm={bpm}
+          snapToGrid={snapToGrid}
           onTrackUpdate={async (trackId, updates) => {
             console.log('Track update called:', trackId, updates);
             

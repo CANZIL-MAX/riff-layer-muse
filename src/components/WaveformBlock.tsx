@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { AudioTrack } from '@/services/ProjectManager';
 import { WaveformDisplay } from './WaveformDisplay';
+import { useSnapToGrid } from '@/hooks/useSnapToGrid';
 
 interface WaveformBlockProps {
   track: AudioTrack;
@@ -10,6 +11,8 @@ interface WaveformBlockProps {
   onTrackUpdate: (trackId: string, updates: Partial<AudioTrack>) => void;
   isPlaying: boolean;
   currentTime: number;
+  bpm?: number;
+  snapToGrid?: boolean;
 }
 
 export function WaveformBlock({
@@ -20,12 +23,21 @@ export function WaveformBlock({
   onTrackUpdate,
   isPlaying,
   currentTime,
+  bpm = 120,
+  snapToGrid = true,
 }: WaveformBlockProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState<'start' | 'end' | false>(false);
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
+  const [showSnapIndicator, setShowSnapIndicator] = useState(false);
   const blockRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  
+  const { snapToGrid: snapTimeToGrid, findNearestSnapPoint } = useSnapToGrid({ 
+    bpm, 
+    subdivision: 4, 
+    snapEnabled: snapToGrid 
+  });
 
   useEffect(() => {
     const loadAudioBuffer = async () => {
@@ -98,7 +110,19 @@ export function WaveformBlock({
       const deltaTime = pixelsToTime(deltaX, timelineWidth);
 
       if (action === 'drag') {
-        const newStartTime = Math.max(0, initialStartTime + deltaTime);
+        let newStartTime = Math.max(0, initialStartTime + deltaTime);
+        
+        // Apply snap to grid if enabled
+        if (snapToGrid) {
+          const snappedTime = findNearestSnapPoint(newStartTime, 0.5);
+          if (snappedTime !== null) {
+            newStartTime = snappedTime;
+            setShowSnapIndicator(true);
+          } else {
+            setShowSnapIndicator(false);
+          }
+        }
+        
         onTrackUpdate(track.id, { startTime: newStartTime });
       } else if (action === 'resize-start') {
         const newTrimStart = Math.max(0, Math.min(initialTrimStart + deltaTime, initialTrimEnd - 0.1));
@@ -112,6 +136,7 @@ export function WaveformBlock({
     const handleMouseUp = () => {
       setIsDragging(false);
       setIsResizing(false);
+      setShowSnapIndicator(false);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
@@ -125,7 +150,9 @@ export function WaveformBlock({
       ref={blockRef}
       className={`absolute h-16 bg-primary/80 rounded border-2 border-primary/50 overflow-hidden cursor-move group transition-all duration-200 ${
         isDragging ? 'shadow-glow scale-105' : ''
-      } ${track.isMuted ? 'opacity-50' : ''}`}
+      } ${track.isMuted ? 'opacity-50' : ''} ${
+        showSnapIndicator ? 'ring-2 ring-accent ring-opacity-50' : ''
+      }`}
       style={{
         left: `${startPosition}px`,
         width: `${Math.max(blockWidth, 20)}px`, // Minimum width for visibility

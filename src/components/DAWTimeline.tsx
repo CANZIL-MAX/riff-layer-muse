@@ -20,6 +20,8 @@ interface DAWTimelineProps {
   onRemoveTrack: (trackId: string) => void;
   onUpdateTrackName: (trackId: string, name: string) => void;
   onTrackUpdate: (trackId: string, updates: Partial<AudioTrack>) => void;
+  bpm?: number;
+  snapToGrid?: boolean;
 }
 
 export function DAWTimeline({ 
@@ -35,7 +37,9 @@ export function DAWTimeline({
   onTrackVolumeChange,
   onRemoveTrack,
   onUpdateTrackName,
-  onTrackUpdate
+  onTrackUpdate,
+  bpm = 120,
+  snapToGrid = true
 }: DAWTimelineProps) {
   const timelineRef = useRef<HTMLDivElement>(null);
   const { 
@@ -149,6 +153,8 @@ export function DAWTimeline({
                         onTrackUpdate={onTrackUpdate}
                         isPlaying={isPlaying}
                         currentTime={currentTime}
+                        bpm={bpm}
+                        snapToGrid={snapToGrid}
                       />
                     )}
                   </div>
