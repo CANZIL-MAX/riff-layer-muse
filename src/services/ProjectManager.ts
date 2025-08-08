@@ -14,9 +14,13 @@ export interface AudioTrack {
   };
   isPlaying: boolean;
   isMuted: boolean;
+  isSolo?: boolean;
+  isRecording?: boolean;
   volume: number;
   duration: number;
   startTime?: number; // Time when recording started on timeline
+  trimStart?: number; // Trimmed start time within the audio
+  trimEnd?: number; // Trimmed end time within the audio
 }
 
 export interface Project {

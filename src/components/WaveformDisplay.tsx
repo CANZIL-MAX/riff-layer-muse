@@ -6,6 +6,8 @@ interface WaveformDisplayProps {
   isMuted: boolean;
   currentTime: number;
   height: number;
+  trimStart?: number;
+  trimEnd?: number;
 }
 
 export function WaveformDisplay({ 
@@ -13,7 +15,9 @@ export function WaveformDisplay({
   isPlaying, 
   isMuted, 
   currentTime, 
-  height 
+  height,
+  trimStart = 0,
+  trimEnd
 }: WaveformDisplayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -26,7 +30,15 @@ export function WaveformDisplay({
 
     const width = canvas.width;
     const data = audioBuffer.getChannelData(0);
-    const step = Math.ceil(data.length / width);
+    
+    // Calculate trim boundaries
+    const actualTrimEnd = trimEnd || audioBuffer.duration;
+    const trimDuration = actualTrimEnd - trimStart;
+    const trimStartSample = Math.floor((trimStart / audioBuffer.duration) * data.length);
+    const trimEndSample = Math.floor((actualTrimEnd / audioBuffer.duration) * data.length);
+    const trimmedLength = trimEndSample - trimStartSample;
+    
+    const step = Math.ceil(trimmedLength / width);
     const amp = height / 2;
 
     // Clear canvas
@@ -46,9 +58,12 @@ export function WaveformDisplay({
       let max = -1.0;
       
       for (let j = 0; j < step; j++) {
-        const datum = data[(i * step) + j];
-        if (datum < min) min = datum;
-        if (datum > max) max = datum;
+        const sampleIndex = trimStartSample + (i * step) + j;
+        if (sampleIndex < trimEndSample && sampleIndex < data.length) {
+          const datum = data[sampleIndex];
+          if (datum < min) min = datum;
+          if (datum > max) max = datum;
+        }
       }
       
       ctx.moveTo(i, (1 + min) * amp);
@@ -58,8 +73,9 @@ export function WaveformDisplay({
     ctx.stroke();
 
     // Draw progress indicator
-    if (isPlaying && !isMuted) {
-      const progressX = (currentTime / audioBuffer.duration) * width;
+    if (isPlaying && !isMuted && currentTime >= 0) {
+      const relativeTime = Math.max(0, Math.min(currentTime, trimDuration));
+      const progressX = (relativeTime / trimDuration) * width;
       ctx.fillStyle = 'hsl(var(--waveform-active))';
       ctx.fillRect(0, 0, progressX, height);
       ctx.globalCompositeOperation = 'multiply';
@@ -67,7 +83,7 @@ export function WaveformDisplay({
       // Reset composite operation
       ctx.globalCompositeOperation = 'source-over';
     }
-  }, [audioBuffer, isPlaying, isMuted, currentTime, height]);
+  }, [audioBuffer, isPlaying, isMuted, currentTime, height, trimStart, trimEnd]);
 
   return (
     <canvas

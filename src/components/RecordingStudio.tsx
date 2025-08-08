@@ -4,7 +4,7 @@ import { AudioMixer } from '@/components/AudioMixer';
 import { PlaybackEngine } from '@/services/PlaybackEngine';
 import { ProjectSelector } from '@/components/ProjectSelector';
 import { AudioLayer } from '@/components/AudioLayer';
-import { Timeline } from '@/components/Timeline';
+import { DAWTimeline } from '@/components/DAWTimeline';
 import { DeviceSelector } from '@/components/DeviceSelector';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -669,7 +669,7 @@ export function RecordingStudio() {
         </Card>
 
         {/* Timeline */}
-        <Timeline
+        <DAWTimeline
           tracks={tracks}
           currentTime={currentTime}
           isPlaying={isPlaying}
@@ -677,8 +677,22 @@ export function RecordingStudio() {
           onRecordingStartTimeChange={setRecordingStartTime}
           onSeek={handleSeek}
           onToggleTrackMute={toggleTrackMute}
+          onToggleTrackSolo={() => {}} // TODO: Implement solo functionality
+          onToggleTrackRecord={() => {}} // TODO: Implement track recording
+          onTrackVolumeChange={(trackId, volume) => {
+            const updatedTracks = tracks.map(track => 
+              track.id === trackId ? { ...track, volume } : track
+            );
+            setTracks(updatedTracks);
+          }}
           onRemoveTrack={removeTrack}
           onUpdateTrackName={updateTrackName}
+          onTrackUpdate={(trackId, updates) => {
+            const updatedTracks = tracks.map(track => 
+              track.id === trackId ? { ...track, ...updates } : track
+            );
+            setTracks(updatedTracks);
+          }}
         />
 
         {/* Audio Layers */}
