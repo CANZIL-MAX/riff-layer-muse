@@ -126,7 +126,9 @@ export function WaveformBlock({
         onTrackUpdate(track.id, { startTime: newStartTime });
       } else if (action === 'resize-start') {
         const newTrimStart = Math.max(0, Math.min(initialTrimStart + deltaTime, initialTrimEnd - 0.1));
-        onTrackUpdate(track.id, { trimStart: newTrimStart });
+        const trimStartDelta = newTrimStart - initialTrimStart;
+        const newStartTime = Math.max(0, initialStartTime + trimStartDelta);
+        onTrackUpdate(track.id, { trimStart: newTrimStart, startTime: newStartTime });
       } else if (action === 'resize-end') {
         const newTrimEnd = Math.max(initialTrimStart + 0.1, Math.min(initialTrimEnd + deltaTime, track.duration));
         onTrackUpdate(track.id, { trimEnd: newTrimEnd });
