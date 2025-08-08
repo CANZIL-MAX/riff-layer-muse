@@ -258,7 +258,7 @@ export function RecordingStudio() {
         const unmutedTracks = tracks.filter(track => !track.isMuted && track.audioData);
         unmutedTracksCount = unmutedTracks.length;
         if (unmutedTracks.length > 0) {
-          await PlaybackEngine.playTracks(unmutedTracks, recordingStartTime);
+          await PlaybackEngine.playTracks(unmutedTracks, currentTime);
           setIsPlaying(true);
         }
       }
