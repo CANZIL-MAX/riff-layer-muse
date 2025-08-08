@@ -8,7 +8,7 @@ import { AudioLayer } from '@/components/AudioLayer';
 import { DAWTimeline } from '@/components/DAWTimeline';
 import { DeviceSelector } from '@/components/DeviceSelector';
 import { MetronomeControls } from '@/components/MetronomeControls';
-import { QuantizeDialog } from '@/components/QuantizeDialog';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -408,7 +408,7 @@ export function RecordingStudio() {
         if (isMetronomeEnabled) {
           await MetronomeEngine.start();
         }
-        await PlaybackEngine.playTracks(unmutedTracks, currentTime);
+        await PlaybackEngine.playTracks(unmutedTracks, 0);
         setIsPlaying(true);
       } else {
         toast({
@@ -558,33 +558,6 @@ export function RecordingStudio() {
     }
   };
 
-  const handleQuantize = async (trackIds: string[], subdivision: number) => {
-    const updatedTracks = tracks.map(track => {
-      if (trackIds.includes(track.id) && track.startTime !== undefined) {
-        const snappedStartTime = MetronomeEngine.snapToNearestBeat(track.startTime, subdivision);
-        return { ...track, startTime: snappedStartTime };
-      }
-      return track;
-    });
-    
-    setTracks(updatedTracks);
-    
-    // Auto-save
-    if (currentProject) {
-      const updatedProject = {
-        ...currentProject,
-        tracks: updatedTracks,
-        lastModified: new Date().toISOString()
-      };
-      await ProjectManager.saveProject(updatedProject);
-      setCurrentProject(updatedProject);
-    }
-    
-    toast({
-      title: "Tracks quantized",
-      description: `${trackIds.length} track(s) aligned to the beat grid`,
-    });
-  };
 
 
   return (
@@ -742,11 +715,6 @@ export function RecordingStudio() {
                   Export
                 </Button>
                 
-                <QuantizeDialog
-                  tracks={tracks}
-                  bpm={bpm}
-                  onQuantize={handleQuantize}
-                />
               </div>
             </div>
 
