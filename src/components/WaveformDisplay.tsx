@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, memo } from 'react';
 
 interface WaveformDisplayProps {
   audioBuffer: AudioBuffer | null;
@@ -13,7 +13,7 @@ interface WaveformDisplayProps {
   zoomLevel?: number;
 }
 
-export function WaveformDisplay({ 
+export const WaveformDisplay = memo(function WaveformDisplay({ 
   audioBuffer, 
   trimStart = 0, 
   trimEnd, 
@@ -188,4 +188,4 @@ export function WaveformDisplay({
       }}
     />
   );
-}
+});

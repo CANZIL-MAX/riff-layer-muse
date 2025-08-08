@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, memo } from 'react';
 import { AudioTrack } from '@/services/ProjectManager';
 import { TrackControls } from '@/components/TrackControls';
 import { WaveformBlock } from '@/components/WaveformBlock';
@@ -27,7 +27,7 @@ interface DAWTimelineProps {
   snapToGrid?: boolean;
 }
 
-export function DAWTimeline({ 
+export const DAWTimeline = memo(function DAWTimeline({ 
   tracks, 
   currentTime,
   isPlaying,
@@ -284,4 +284,4 @@ export function DAWTimeline({
       </div>
     </Card>
   );
-}
+});

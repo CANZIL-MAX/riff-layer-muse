@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { ProjectManager } from '@/services/ProjectManager';
 import { AudioMixer } from '@/components/AudioMixer';
 import { PlaybackEngine } from '@/services/PlaybackEngine';
@@ -44,6 +44,66 @@ export function RecordingStudio() {
   const recordedChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const { toast } = useToast();
+
+  // Memoize track callbacks to prevent unnecessary re-renders
+  const memoizedCallbacks = useMemo(() => ({
+    toggleTrackMute: async (trackId: string) => {
+      const updatedTracks = tracks.map(track => 
+        track.id === trackId ? { ...track, isMuted: !track.isMuted } : track
+      );
+      setTracks(updatedTracks);
+      
+      if (currentProject) {
+        const updatedProject = {
+          ...currentProject,
+          tracks: updatedTracks,
+          lastModified: new Date().toISOString()
+        };
+        await ProjectManager.saveProject(updatedProject);
+        setCurrentProject(updatedProject);
+      }
+    },
+
+    updateTrackName: async (trackId: string, newName: string) => {
+      if (!newName.trim()) return;
+      
+      const updatedTracks = tracks.map(track => 
+        track.id === trackId ? { ...track, name: newName.trim() } : track
+      );
+      setTracks(updatedTracks);
+      
+      if (currentProject) {
+        const updatedProject = {
+          ...currentProject,
+          tracks: updatedTracks,
+          lastModified: new Date().toISOString()
+        };
+        await ProjectManager.saveProject(updatedProject);
+        setCurrentProject(updatedProject);
+      }
+    },
+
+    removeTrack: async (trackId: string) => {
+      const updatedTracks = tracks.filter(track => track.id !== trackId);
+      setTracks(updatedTracks);
+      
+      if (currentProject) {
+        const updatedProject = {
+          ...currentProject,
+          tracks: updatedTracks,
+          lastModified: new Date().toISOString()
+        };
+        await ProjectManager.saveProject(updatedProject);
+        setCurrentProject(updatedProject);
+      }
+    }
+  }), [tracks, currentProject]);
+
+  // Memoize unmuted tracks to avoid recalculation
+  const unmutedTracks = useMemo(() => 
+    tracks.filter(track => !track.isMuted && track.audioData), 
+    [tracks]
+  );
 
   useEffect(() => {
     const initProject = async () => {
@@ -403,7 +463,6 @@ export function RecordingStudio() {
       MetronomeEngine.stop();
       setIsPlaying(false);
     } else {
-      const unmutedTracks = tracks.filter(track => !track.isMuted && track.audioData);
       if (unmutedTracks.length > 0) {
         if (isMetronomeEnabled) {
           await MetronomeEngine.start();
@@ -442,8 +501,7 @@ export function RecordingStudio() {
     }
 
     try {
-      // Mix all unmuted tracks
-      const unmutedTracks = tracks.filter(track => !track.isMuted && track.audioData);
+      // Use pre-calculated unmuted tracks
       
       if (unmutedTracks.length === 0) {
         toast({
@@ -754,7 +812,7 @@ export function RecordingStudio() {
           recordingStartTime={recordingStartTime}
           onRecordingStartTimeChange={setRecordingStartTime}
           onSeek={handleSeek}
-          onToggleTrackMute={toggleTrackMute}
+          onToggleTrackMute={memoizedCallbacks.toggleTrackMute}
           onToggleTrackSolo={() => {}} // TODO: Implement solo functionality
           onToggleTrackRecord={() => {}} // TODO: Implement track recording
           onTrackVolumeChange={(trackId, volume) => {
@@ -763,8 +821,8 @@ export function RecordingStudio() {
             );
             setTracks(updatedTracks);
           }}
-          onRemoveTrack={removeTrack}
-          onUpdateTrackName={updateTrackName}
+          onRemoveTrack={memoizedCallbacks.removeTrack}
+          onUpdateTrackName={memoizedCallbacks.updateTrackName}
           bpm={bpm}
           snapToGrid={snapToGrid}
           onTrackUpdate={async (trackId, updates) => {
@@ -833,9 +891,9 @@ export function RecordingStudio() {
                     index={index}
                     isPlaying={isPlaying}
                     currentTime={currentTime}
-                    onToggleMute={(trackId) => toggleTrackMute(trackId)}
-                    onRemove={(trackId) => removeTrack(trackId)}
-                    onUpdateTrackName={updateTrackName}
+                    onToggleMute={memoizedCallbacks.toggleTrackMute}
+                    onRemove={memoizedCallbacks.removeTrack}
+                    onUpdateTrackName={memoizedCallbacks.updateTrackName}
                   />
                 ))}
               </div>
