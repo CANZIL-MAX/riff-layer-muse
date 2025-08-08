@@ -3,6 +3,7 @@ import { AudioTrack } from '@/services/ProjectManager';
 import { TrackControls } from '@/components/TrackControls';
 import { WaveformBlock } from '@/components/WaveformBlock';
 import { MeasureRuler } from '@/components/MeasureRuler';
+import { BeatGrid } from '@/components/BeatGrid';
 import { ZoomControls } from '@/components/ZoomControls';
 import { useTimeline } from '@/hooks/useTimeline';
 import { useTimelineZoom } from '@/hooks/useTimelineZoom';
@@ -173,6 +174,19 @@ export function DAWTimeline({
               bpm={bpm}
             />
 
+            {/* Beat Grid */}
+            <div className="relative">
+              <BeatGrid
+                timelineWidth={zoomedWidth}
+                totalDuration={totalDuration}
+                bpm={bpm}
+                timeToPixels={(time, width) => (time / totalDuration) * width}
+                showGrid={true}
+                subdivision={4}
+                zoomLevel={zoomLevel}
+              />
+            </div>
+
             {/* Timeline content */}
             <div 
               className="relative overflow-x-auto overflow-y-hidden"
@@ -234,6 +248,7 @@ export function DAWTimeline({
                           bpm={bpm}
                           snapToGrid={snapToGrid}
                           scrollOffset={scrollPosition}
+                          zoomLevel={zoomLevel}
                         />
                       )}
                     </div>

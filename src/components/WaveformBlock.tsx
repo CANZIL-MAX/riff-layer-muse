@@ -14,6 +14,7 @@ interface WaveformBlockProps {
   bpm?: number;
   snapToGrid?: boolean;
   scrollOffset?: number;
+  zoomLevel?: number;
 }
 
 export function WaveformBlock({
@@ -27,6 +28,7 @@ export function WaveformBlock({
   bpm = 120,
   snapToGrid = true,
   scrollOffset = 0,
+  zoomLevel = 1,
 }: WaveformBlockProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState<'start' | 'end' | false>(false);
@@ -35,11 +37,7 @@ export function WaveformBlock({
   const blockRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   
-  const { snapToGrid: snapTimeToGrid, findNearestSnapPoint } = useSnapToGrid({ 
-    bpm, 
-    subdivision: 4, 
-    snapEnabled: snapToGrid 
-  });
+  const { snapToGrid: snapToGridFn } = useSnapToGrid({ bpm, snapEnabled: snapToGrid, zoomLevel });
 
   useEffect(() => {
     const loadAudioBuffer = async () => {
@@ -116,13 +114,11 @@ export function WaveformBlock({
         
         // Apply snap to grid if enabled
         if (snapToGrid) {
-          const snappedTime = findNearestSnapPoint(newStartTime, 0.5);
-          if (snappedTime !== null) {
-            newStartTime = snappedTime;
-            setShowSnapIndicator(true);
-          } else {
-            setShowSnapIndicator(false);
-          }
+          const snappedTime = snapToGridFn(newStartTime);
+          newStartTime = snappedTime;
+          setShowSnapIndicator(true);
+        } else {
+          setShowSnapIndicator(false);
         }
         
         onTrackUpdate(track.id, { startTime: newStartTime });

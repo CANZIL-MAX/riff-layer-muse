@@ -7,6 +7,7 @@ interface BeatGridProps {
   timeToPixels: (time: number, width: number) => number;
   showGrid?: boolean;
   subdivision?: number; // 1 = quarter notes, 2 = eighth notes, 4 = sixteenth notes
+  zoomLevel?: number;
 }
 
 export function BeatGrid({
@@ -16,12 +17,20 @@ export function BeatGrid({
   timeToPixels,
   showGrid = true,
   subdivision = 4,
+  zoomLevel = 1,
 }: BeatGridProps) {
   if (!showGrid) return null;
 
   const beatDuration = 60 / bpm;
-  const subdivisionDuration = beatDuration / subdivision;
-  const gridLines: { position: number; isBeat: boolean; isMeasure: boolean }[] = [];
+  
+  // Increase grid density based on zoom level
+  let effectiveSubdivision = subdivision;
+  if (zoomLevel >= 2) effectiveSubdivision = subdivision * 2;
+  if (zoomLevel >= 4) effectiveSubdivision = subdivision * 4;
+  if (zoomLevel >= 6) effectiveSubdivision = subdivision * 8;
+  
+  const subdivisionDuration = beatDuration / effectiveSubdivision;
+  const gridLines: { position: number; isBeat: boolean; isMeasure: boolean; isSubdivision?: boolean }[] = [];
 
   let time = 0;
   let beatCount = 0;
@@ -29,13 +38,15 @@ export function BeatGrid({
 
   while (time <= totalDuration) {
     const position = timeToPixels(time, timelineWidth);
-    const isBeat = beatCount % subdivision === 0;
-    const isMeasure = isBeat && beatCount % (4 * subdivision) === 0;
+    const isBeat = beatCount % effectiveSubdivision === 0;
+    const isSubdivision = beatCount % (effectiveSubdivision / 4) === 0 && !isBeat;
+    const isMeasure = isBeat && beatCount % (4 * effectiveSubdivision) === 0;
 
     gridLines.push({
       position,
       isBeat,
       isMeasure,
+      isSubdivision,
     });
 
     time += subdivisionDuration;
@@ -53,10 +64,12 @@ export function BeatGrid({
           key={index}
           className={`absolute top-0 bottom-0 ${
             line.isMeasure
-              ? 'border-l-2 border-accent/60'
+              ? 'border-l-2 border-accent/80 z-20'
               : line.isBeat
-              ? 'border-l border-accent/40'
-              : 'border-l border-accent/20'
+              ? 'border-l border-accent/60 z-10'
+              : line.isSubdivision && zoomLevel >= 2
+              ? 'border-l border-accent/30 z-5'
+              : 'border-l border-accent/15'
           }`}
           style={{ left: `${line.position}px` }}
         />
