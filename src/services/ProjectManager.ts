@@ -243,7 +243,7 @@ class ProjectManagerService {
   }
 
   // Convert base64 back to AudioBuffer
-  static async base64ToAudioBuffer(base64Data: string, audioContext: AudioContext): Promise<AudioBuffer> {
+  async base64ToAudioBuffer(base64Data: string, audioContext: AudioContext): Promise<AudioBuffer> {
     try {
       const binaryString = atob(base64Data);
       const bytes = new Uint8Array(binaryString.length);
