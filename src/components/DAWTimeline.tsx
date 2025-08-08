@@ -167,26 +167,6 @@ export function DAWTimeline({
             className="flex-1 overflow-hidden"
             onWheel={handleWheel}
           >
-            {/* Measure ruler */}
-            <MeasureRuler 
-              timelineWidth={zoomedWidth} 
-              totalDuration={totalDuration}
-              bpm={bpm}
-            />
-
-            {/* Beat Grid */}
-            <div className="relative">
-              <BeatGrid
-                timelineWidth={zoomedWidth}
-                totalDuration={totalDuration}
-                bpm={bpm}
-                timeToPixels={(time, width) => (time / totalDuration) * width}
-                showGrid={true}
-                subdivision={4}
-                zoomLevel={zoomLevel}
-              />
-            </div>
-
             {/* Timeline content */}
             <div 
               className="relative overflow-x-auto overflow-y-hidden"
@@ -200,28 +180,51 @@ export function DAWTimeline({
                 }
               }}
             >
+              {/* Measure ruler - now inside scrollable area */}
+              <div 
+                className="relative"
+                style={{ 
+                  width: `${zoomedWidth}px`,
+                  transform: `translateX(-${scrollPosition}px)`
+                }}
+              >
+                <MeasureRuler 
+                  timelineWidth={zoomedWidth} 
+                  totalDuration={totalDuration}
+                  bpm={bpm}
+                />
+              </div>
+
               <div 
                 ref={timelineRef}
                 data-timeline
                 className="relative bg-timeline/30 cursor-pointer min-h-[200px]"
-                style={{ width: `${zoomedWidth}px` }}
+                style={{ width: `${zoomedWidth}px`, transform: `translateX(-${scrollPosition}px)` }}
                 onClick={handleTimelineClick}
               >
+                {/* Beat Grid - now inside timeline */}
+                <BeatGrid
+                  timelineWidth={zoomedWidth}
+                  totalDuration={totalDuration}
+                  bpm={bpm}
+                  timeToPixels={timeToPixels}
+                  showGrid={true}
+                  subdivision={4}
+                  zoomLevel={zoomLevel}
+                />
                 {/* Current playback position */}
-                {currentTimePosition >= 0 && currentTimePosition <= baseTimelineWidth && (
-                  <div
-                    className="absolute top-0 w-0.5 h-full bg-primary z-30 pointer-events-none"
-                    style={{ left: `${currentTimePosition}px` }}
-                  >
-                    <div className="absolute -top-1 -left-1.5 w-3 h-3 bg-primary rounded-full shadow-glow" />
-                  </div>
-                )}
+                <div
+                  className="absolute top-0 w-0.5 h-full bg-primary z-30 pointer-events-none"
+                  style={{ left: `${timeToPixels(currentTime)}px` }}
+                >
+                  <div className="absolute -top-1 -left-1.5 w-3 h-3 bg-primary rounded-full shadow-glow" />
+                </div>
 
                 {/* Recording start position cursor */}
-                {recordingStartTime > 0 && recordingStartPosition >= 0 && recordingStartPosition <= baseTimelineWidth && (
+                {recordingStartTime > 0 && (
                   <div
                     className="absolute top-0 w-0.5 h-full bg-recording z-30"
-                    style={{ left: `${recordingStartPosition}px` }}
+                    style={{ left: `${timeToPixels(recordingStartTime)}px` }}
                   >
                     <div className="absolute -top-1 -left-1.5 w-3 h-3 bg-recording rounded-full shadow-recording" />
                     <div className="absolute -top-6 -left-8 text-xs bg-recording text-recording-foreground px-2 py-1 rounded whitespace-nowrap">
