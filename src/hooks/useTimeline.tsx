@@ -17,12 +17,14 @@ export function useTimeline(tracks: AudioTrack[]) {
     return `${mins}:${secs.padStart(4, '0')}`;
   }, []);
 
-  const timeToPixels = useCallback((time: number, width: number) => {
-    return (time / totalDuration) * width;
+  const timeToPixels = useCallback((time: number, width: number, visibleDuration?: number) => {
+    const duration = visibleDuration || totalDuration;
+    return (time / duration) * width;
   }, [totalDuration]);
 
-  const pixelsToTime = useCallback((pixels: number, width: number) => {
-    return (pixels / width) * totalDuration;
+  const pixelsToTime = useCallback((pixels: number, width: number, visibleDuration?: number) => {
+    const duration = visibleDuration || totalDuration;
+    return (pixels / width) * duration;
   }, [totalDuration]);
 
   return {

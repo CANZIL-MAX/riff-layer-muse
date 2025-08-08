@@ -5,14 +5,15 @@ import { useSnapToGrid } from '@/hooks/useSnapToGrid';
 
 interface WaveformBlockProps {
   track: AudioTrack;
-  timeToPixels: (time: number, width: number) => number;
-  pixelsToTime: (pixels: number, width: number) => number;
+  timeToPixels: (time: number) => number;
+  pixelsToTime: (pixels: number) => number;
   timelineWidth: number;
   onTrackUpdate: (trackId: string, updates: Partial<AudioTrack>) => void;
   isPlaying: boolean;
   currentTime: number;
   bpm?: number;
   snapToGrid?: boolean;
+  scrollOffset?: number;
 }
 
 export function WaveformBlock({
@@ -25,6 +26,7 @@ export function WaveformBlock({
   currentTime,
   bpm = 120,
   snapToGrid = true,
+  scrollOffset = 0,
 }: WaveformBlockProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState<'start' | 'end' | false>(false);
@@ -85,8 +87,8 @@ export function WaveformBlock({
   const trimEnd = track.trimEnd || track.duration;
   const displayDuration = trimEnd - trimStart;
   
-  const startPosition = timeToPixels(startTime, timelineWidth);
-  const blockWidth = timeToPixels(displayDuration, timelineWidth);
+  const startPosition = timeToPixels(startTime);
+  const blockWidth = timeToPixels(displayDuration);
 
   const handleMouseDown = (e: React.MouseEvent, action: 'drag' | 'resize-start' | 'resize-end') => {
     e.preventDefault();
@@ -107,7 +109,7 @@ export function WaveformBlock({
 
     const handleMouseMove = (e: MouseEvent) => {
       const deltaX = e.clientX - startX;
-      const deltaTime = pixelsToTime(deltaX, timelineWidth);
+      const deltaTime = pixelsToTime(deltaX);
 
       if (action === 'drag') {
         let newStartTime = Math.max(0, initialStartTime + deltaTime);
