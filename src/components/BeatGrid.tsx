@@ -62,12 +62,12 @@ export function BeatGrid({
           key={index}
           className={`absolute top-0 bottom-0 ${
             line.isMeasure
-              ? 'border-l-2 border-gray-400/40 z-20'
+              ? 'border-l-2 border-gray-400/20 z-20'
               : line.isBeat
-              ? 'border-l border-gray-400/25 z-10'
+              ? 'border-l border-gray-400/12 z-10'
               : line.isSubdivision && zoomLevel >= 2
-              ? 'border-l border-gray-400/15 z-5'
-              : 'border-l border-gray-400/8'
+              ? 'border-l border-gray-400/8 z-5'
+              : 'border-l border-gray-400/4'
           }`}
           style={{ left: `${line.position}px` }}
         />
