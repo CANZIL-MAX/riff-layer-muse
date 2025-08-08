@@ -134,16 +134,28 @@ export class PlaybackEngineService {
       source.connect(trackGain);
       trackGain.connect(this.masterGainNode!);
 
+      // Calculate WHEN to start the audio based on track position
+      const audioContextStartTime = this.audioContext.currentTime;
+      let whenToStart = audioContextStartTime;
+      
+      // If playing from timeline start and track has a delayed start time
+      if (currentTimelinePosition === 0 && trackStartTime > 0) {
+        whenToStart = audioContextStartTime + trackStartTime;
+        console.log(`Track ${track.name} scheduled to start in ${trackStartTime} seconds`);
+      }
+
       // Start playing from the calculated offset
       const duration = trimEnd - actualAudioOffset;
       console.log(`STARTING AUDIO for track ${track.name}:`, { 
+        whenToStart: whenToStart - audioContextStartTime,
         actualAudioOffset, 
         duration, 
         trimStart, 
         trimEnd,
         audioBufferDuration: audioBuffer.duration
       });
-      source.start(0, actualAudioOffset, duration);
+      
+      source.start(whenToStart, actualAudioOffset, duration);
       this.playingSources.set(track.id, source);
       console.log(`Track ${track.name} added to playing sources. Total playing: ${this.playingSources.size}`);
 
