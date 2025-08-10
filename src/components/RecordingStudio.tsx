@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { ProjectManager } from '@/services/ProjectManager';
+import { SafeProjectManager as ProjectManager } from '@/services/SafeProjectManager';
 import { AudioMixer } from '@/components/AudioMixer';
 import { PlaybackEngine } from '@/services/PlaybackEngine';
 import { MetronomeEngine } from '@/services/MetronomeService';
@@ -18,9 +18,14 @@ import { useToast } from '@/hooks/use-toast';
 import { Mic, Play, Pause, Square, Upload, Save, Download, FolderOpen, Volume2, Eye, EyeOff, ChevronDown } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Project, AudioTrack } from '@/services/ProjectManager';
+import { SimpleFallback } from '@/components/SimpleFallback';
 
 export function RecordingStudio() {
+  console.log('RecordingStudio component initializing...');
+  
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
+  const [initError, setInitError] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [tracks, setTracks] = useState<AudioTrack[]>([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -109,17 +114,25 @@ export function RecordingStudio() {
 
   useEffect(() => {
     const initProject = async () => {
+      console.log('Starting RecordingStudio initialization...');
       try {
+        console.log('Initializing ProjectManager...');
         await ProjectManager.initialize();
+        console.log('ProjectManager initialized successfully');
+        
+        console.log('Initializing PlaybackEngine...');
         await PlaybackEngine.initialize();
+        console.log('PlaybackEngine initialized successfully');
         
         // Set up time update callback
         PlaybackEngine.setOnTimeUpdate(setCurrentTime);
         
-        // Initialize metronome
+        console.log('Initializing MetronomeEngine...');
         await MetronomeEngine.initialize();
+        console.log('MetronomeEngine initialized successfully');
         
         const defaultProject = ProjectManager.createNewProject('My First Project');
+        console.log('Default project created:', defaultProject);
         setCurrentProject(defaultProject);
         setProjectName(defaultProject.name);
         
@@ -130,11 +143,32 @@ export function RecordingStudio() {
           setMetronomeVolume(defaultProject.settings.metronomeVolume || 0.5);
           setSnapToGrid(defaultProject.settings.snapToGrid !== false);
         }
+        
+        console.log('RecordingStudio initialization completed successfully');
+        setIsInitialized(true);
       } catch (error) {
-        console.error('Failed to initialize project:', error);
+        console.error('Failed to initialize RecordingStudio:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown initialization error';
+        setInitError(errorMessage);
+        
+        // Try to create a minimal fallback project
+        try {
+          console.log('Creating fallback project...');
+          const fallbackProject = ProjectManager.createNewProject('Fallback Project');
+          setCurrentProject(fallbackProject);
+          setProjectName(fallbackProject.name);
+          setIsInitialized(true);
+          console.log('Fallback project created successfully');
+        } catch (fallbackError) {
+          console.error('Failed to create fallback project:', fallbackError);
+          setInitError('Complete initialization failure');
+        }
+        
         toast({
-          title: "Error",
-          description: "Failed to initialize project manager",
+          title: "Initialization Warning",
+          description: errorMessage.includes('directory') 
+            ? "Storage not available, working in memory mode"
+            : "Some features may be limited",
           variant: "destructive",
         });
       }
@@ -713,6 +747,16 @@ export function RecordingStudio() {
   };
 
 
+
+  // Show fallback while initializing or if there's an error
+  if (!isInitialized) {
+    return (
+      <SimpleFallback 
+        error={initError} 
+        onRetry={() => window.location.reload()} 
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-4">

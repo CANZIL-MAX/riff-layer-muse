@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { FolderIcon, PlusIcon, TrashIcon, MusicIcon } from 'lucide-react';
-import { Project, ProjectManager } from '@/services/ProjectManager';
+import { Project } from '@/services/ProjectManager';
+import { SafeProjectManager as ProjectManager } from '@/services/SafeProjectManager';
 import { useToast } from '@/hooks/use-toast';
 
 interface ProjectSelectorProps {
