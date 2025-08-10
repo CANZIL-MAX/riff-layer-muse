@@ -25,6 +25,7 @@ interface DAWTimelineProps {
   onTrackUpdate: (trackId: string, updates: Partial<AudioTrack>) => void;
   bpm?: number;
   snapToGrid?: boolean;
+  onScrollToTime?: (scrollToTimeFunction: (time: number) => void) => void;
 }
 
 export const DAWTimeline = memo(function DAWTimeline({ 
@@ -42,7 +43,8 @@ export const DAWTimeline = memo(function DAWTimeline({
   onUpdateTrackName,
   onTrackUpdate,
   bpm = 120,
-  snapToGrid = true
+  snapToGrid = true,
+  onScrollToTime
 }: DAWTimelineProps) {
   const timelineRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -109,11 +111,18 @@ export const DAWTimeline = memo(function DAWTimeline({
   const currentTimePosition = timeToPixels(currentTime) - scrollPosition;
   const recordingStartPosition = timeToPixels(recordingStartTime) - scrollPosition;
 
+  // Expose scrollToTime function to parent
+  useEffect(() => {
+    if (onScrollToTime) {
+      onScrollToTime(scrollToTime);
+    }
+  }, [onScrollToTime, scrollToTime]);
+
   return (
     <Card className="overflow-hidden">
-      <div className="flex">
+      <div className="flex flex-col lg:flex-row">
         {/* Track Controls Panel */}
-        <div className="flex flex-col bg-layer-bg border-r border-border">
+        <div className="flex flex-col bg-layer-bg border-r lg:border-r border-b lg:border-b-0 border-border w-full lg:w-auto">
           {/* Header */}
           <div className="h-8 border-b border-border bg-timeline flex items-center px-3">
             <span className="text-xs font-medium text-muted-foreground">Tracks</span>
@@ -122,31 +131,33 @@ export const DAWTimeline = memo(function DAWTimeline({
           </div>
 
           {/* Track controls */}
-          <div className="flex-1">
+          <div className="flex-1 lg:max-h-80 overflow-y-auto">
             {tracks.length === 0 ? (
               <div className="h-24 flex items-center justify-center text-muted-foreground text-sm">
                 No tracks
               </div>
             ) : (
-              tracks.map((track, index) => (
-                <TrackControls
-                  key={track.id}
-                  track={track}
-                  index={index}
-                  onToggleMute={onToggleTrackMute}
-                  onToggleSolo={onToggleTrackSolo}
-                  onToggleRecord={onToggleTrackRecord}
-                  onVolumeChange={onTrackVolumeChange}
-                  onRemove={onRemoveTrack}
-                  onUpdateTrackName={onUpdateTrackName}
-                />
-              ))
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2 p-2 lg:p-0 lg:gap-0">
+                {tracks.map((track, index) => (
+                  <TrackControls
+                    key={track.id}
+                    track={track}
+                    index={index}
+                    onToggleMute={onToggleTrackMute}
+                    onToggleSolo={onToggleTrackSolo}
+                    onToggleRecord={onToggleTrackRecord}
+                    onVolumeChange={onTrackVolumeChange}
+                    onRemove={onRemoveTrack}
+                    onUpdateTrackName={onUpdateTrackName}
+                  />
+                ))}
+              </div>
             )}
           </div>
         </div>
 
         {/* Timeline Area */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-h-0">
           {/* Zoom Controls */}
           <div className="flex items-center justify-between p-2 border-b border-border">
             <ZoomControls
@@ -156,22 +167,23 @@ export const DAWTimeline = memo(function DAWTimeline({
               onSetZoom={setZoom}
               onFitToContent={fitToContent}
             />
-            <div className="text-xs text-muted-foreground">
-              Ctrl+Wheel to zoom, Wheel to scroll
+            <div className="text-xs text-muted-foreground hidden sm:block">
+              Pinch to zoom, Swipe to scroll
             </div>
           </div>
 
           {/* Scrollable timeline container */}
           <div 
             ref={scrollContainerRef}
-            className="flex-1 overflow-hidden"
+            className="flex-1 overflow-hidden touch-pan-x"
             onWheel={handleWheel}
           >
             {/* Timeline content */}
             <div 
-              className="relative overflow-x-auto overflow-y-hidden"
+              className="relative overflow-x-auto overflow-y-hidden h-full"
               style={{ 
-                width: `${baseTimelineWidth}px`
+                width: `100%`,
+                minWidth: `${baseTimelineWidth}px`
               }}
               onScroll={(e) => {
                 const newScrollPosition = e.currentTarget.scrollLeft;

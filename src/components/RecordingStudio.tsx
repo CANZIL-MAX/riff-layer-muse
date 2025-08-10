@@ -52,6 +52,9 @@ export function RecordingStudio() {
   const streamRef = useRef<MediaStream | null>(null);
   const { toast } = useToast();
 
+  // State to store scrollToTime function from DAWTimeline
+  const [scrollToTimeFunction, setScrollToTimeFunction] = useState<((time: number) => void) | null>(null);
+
   // Memoize track callbacks to prevent unnecessary re-renders
   const memoizedCallbacks = useMemo(() => ({
     toggleTrackMute: async (trackId: string) => {
@@ -608,11 +611,16 @@ export function RecordingStudio() {
     }
   };
 
-  const stopPlayback = () => {
+  const stopPlayback = (scrollToTimeFunction?: (time: number) => void) => {
     PlaybackEngine.stop();
     MetronomeEngine.stop();
     setIsPlaying(false);
     setCurrentTime(0);
+    
+    // Scroll timeline back to the start
+    if (scrollToTimeFunction) {
+      scrollToTimeFunction(0);
+    }
   };
 
   const handleSeek = (time: number) => {
@@ -795,7 +803,7 @@ export function RecordingStudio() {
         )}
 
         {/* Recording Setup and Metronome */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <DeviceSelector
             selectedDeviceId={selectedDeviceId}
             onDeviceChange={setSelectedDeviceId}
@@ -836,23 +844,24 @@ export function RecordingStudio() {
         </div>
 
         {/* Transport Controls */}
-        <Card className="p-6">
+        <Card className="p-4 lg:p-6">
           <div className="space-y-4">
-            <div className="flex items-center justify-center gap-4 flex-wrap">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-center gap-2 sm:gap-4 flex-wrap">
+              <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
                 <Button
                   variant={isRecording ? "destructive" : "default"}
                   onClick={isRecording ? stopRecording : startRecording}
-                  className={isRecording ? "animate-pulse" : ""}
+                  className={`${isRecording ? "animate-pulse" : ""} min-h-[48px] w-full sm:w-auto touch-manipulation`}
+                  size="lg"
                 >
                   {isRecording ? (
                     <>
-                      <Square className="w-4 h-4 mr-2" />
-                      Stop
+                      <Square className="w-5 h-5 mr-2" />
+                      Stop Recording
                     </>
                   ) : (
                     <>
-                      <Mic className="w-4 h-4 mr-2" />
+                      <Mic className="w-5 h-5 mr-2" />
                       Record
                     </>
                   )}
@@ -862,31 +871,37 @@ export function RecordingStudio() {
                   <Button
                     variant="secondary"
                     onClick={startRecordingWithPlayback}
-                    className="bg-gradient-to-r from-primary to-primary-glow"
+                    className="bg-gradient-to-r from-primary to-primary-glow min-h-[48px] w-full sm:w-auto touch-manipulation"
+                    size="lg"
                   >
                     <Mic className="w-4 h-4 mr-1" />
-                    <Play className="w-4 h-4 mr-2" />
-                    Record + Play
+                    <Play className="w-4 h-4 mr-1" />
+                    <span className="hidden sm:inline">Record + Play</span>
+                    <span className="sm:hidden">Rec+Play</span>
                   </Button>
                 )}
               </div>
 
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
                 <Button
                   onClick={togglePlayback}
                   disabled={tracks.length === 0}
                   variant={isPlaying ? "secondary" : "default"}
+                  className="min-h-[48px] touch-manipulation"
+                  size="lg"
                 >
-                  {isPlaying ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+                  {isPlaying ? <Pause className="w-5 h-5 mr-2" /> : <Play className="w-5 h-5 mr-2" />}
                   {isPlaying ? 'Pause' : 'Play'}
                 </Button>
 
                 <Button
-                  onClick={stopPlayback}
+                  onClick={() => stopPlayback(scrollToTimeFunction)}
                   disabled={!isPlaying && currentTime === 0}
                   variant="outline"
+                  className="min-h-[48px] touch-manipulation"
+                  size="lg"
                 >
-                  <Square className="w-4 h-4 mr-2" />
+                  <Square className="w-5 h-5 mr-2" />
                   Stop
                 </Button>
 
@@ -898,20 +913,20 @@ export function RecordingStudio() {
                     className="absolute inset-0 opacity-0 cursor-pointer"
                     title="Upload WAV, MP3, AIFF, M4A, or OGG audio files (max 50MB)"
                   />
-                  <Button variant="outline">
-                    <Upload className="w-4 h-4 mr-2" />
+                  <Button variant="outline" className="min-h-[48px] touch-manipulation w-full" size="lg">
+                    <Upload className="w-5 h-5 mr-2" />
                     Upload
                   </Button>
                 </div>
 
-                <Button onClick={saveCurrentProject} variant="outline">
-                  <Save className="w-4 h-4 mr-2" />
-                  Save
+                <Button onClick={saveCurrentProject} variant="outline" className="min-h-[48px] touch-manipulation" size="lg">
+                  <Save className="w-5 h-5 mr-2" />
+                  <span className="hidden sm:inline">Save</span>
                 </Button>
 
-                <Button onClick={exportProject} variant="outline">
-                  <Download className="w-4 h-4 mr-2" />
-                  Export
+                <Button onClick={exportProject} variant="outline" className="min-h-[48px] touch-manipulation" size="lg">
+                  <Download className="w-5 h-5 mr-2" />
+                  <span className="hidden sm:inline">Export</span>
                 </Button>
                 
               </div>
@@ -966,6 +981,7 @@ export function RecordingStudio() {
           onUpdateTrackName={memoizedCallbacks.updateTrackName}
           bpm={bpm}
           snapToGrid={snapToGrid}
+          onScrollToTime={setScrollToTimeFunction}
           onTrackUpdate={async (trackId, updates) => {
             console.log('Track update called:', trackId, updates);
             

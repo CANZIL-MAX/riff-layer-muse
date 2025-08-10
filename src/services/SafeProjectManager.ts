@@ -189,17 +189,33 @@ class SafeProjectManagerService {
 
   async shareAudioFile(audioData: string, fileName: string): Promise<void> {
     console.log('Sharing audio file:', fileName);
-    // This is a basic implementation - in a real app you'd use proper sharing
-    // For now, just create a download link
-    const blob = new Blob([atob(audioData)], { type: 'audio/wav' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    try {
+      // Remove data URL prefix if present
+      const base64Data = audioData.replace(/^data:audio\/[^;]+;base64,/, '');
+      
+      // Convert base64 to binary
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      // Create blob with proper audio data
+      const blob = new Blob([bytes], { type: 'audio/wav' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      console.log('Audio file export completed successfully');
+    } catch (error) {
+      console.error('Error sharing audio file:', error);
+      throw new Error('Failed to export audio file');
+    }
   }
 
   getStorageMode(): 'native' | 'memory' {
