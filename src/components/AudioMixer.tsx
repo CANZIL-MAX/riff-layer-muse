@@ -93,97 +93,141 @@ export class AudioMixerService {
 
   async base64ToAudioBuffer(base64Data: string, audioContext: AudioContext): Promise<AudioBuffer> {
     try {
-      // Remove data URL prefix if present
-      const cleanBase64 = base64Data.replace(/^data:audio\/[^;]+;base64,/, '');
+      // Handle different base64 formats
+      let cleanBase64 = base64Data;
+      if (base64Data.startsWith('data:')) {
+        cleanBase64 = base64Data.replace(/^data:audio\/[^;]+;base64,/, '');
+      }
       
-      // Convert base64 to ArrayBuffer
+      // Validate base64 format
+      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(cleanBase64)) {
+        throw new Error('Invalid base64 format');
+      }
+      
+      // Decode base64 to array buffer with error handling
       const binaryString = atob(cleanBase64);
+      if (binaryString.length === 0) {
+        throw new Error('Empty audio data after base64 decode');
+      }
+      
       const bytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
       
-      // Decode audio data
-      return await audioContext.decodeAudioData(bytes.buffer);
+      // Validate minimum audio data size
+      if (bytes.length < 44) { // Minimum WAV header size
+        throw new Error('Audio data too small to be valid');
+      }
+      
+      // Decode audio data with validation
+      const audioBuffer = await audioContext.decodeAudioData(bytes.buffer);
+      
+      if (!audioBuffer || audioBuffer.length === 0) {
+        throw new Error('Failed to decode audio buffer');
+      }
+      
+      return audioBuffer;
     } catch (error) {
-      console.error('Failed to decode audio data:', error);
-      throw error;
+      console.error('❌ Failed to convert base64 to audio buffer:', error);
+      throw new Error(`Audio conversion failed: ${error.message}`);
     }
   }
 
   async mixTracks(tracks: AudioTrack[]): Promise<AudioBuffer> {
+    console.log('🎵 Starting to mix tracks:', tracks.length);
+    
     const audioContext = await this.initializeAudioContext();
     
     if (tracks.length === 0) {
       throw new Error('No tracks to mix');
     }
 
-    // Find the longest track duration
+    // Get all audio buffers with enhanced validation
+    const validTracks: { track: AudioTrack; buffer: AudioBuffer }[] = [];
     let maxDuration = 0;
-    const audioBuffers: AudioBuffer[] = [];
-    
+
     for (const track of tracks) {
-      if (!track.isMuted && track.audioData) {
-        try {
-          // Convert base64 back to ArrayBuffer
-          const binaryString = atob(track.audioData);
-          const bytes = new Uint8Array(binaryString.length);
-          for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-          }
-          
-          const audioBuffer = await audioContext.decodeAudioData(bytes.buffer);
-          audioBuffers.push(audioBuffer);
-          maxDuration = Math.max(maxDuration, audioBuffer.duration);
-        } catch (error) {
-          console.warn(`Failed to decode audio for track ${track.name}:`, error);
+      if (!track.audioData) {
+        console.warn('⚠️ Skipping track without audio data:', track.name);
+        continue;
+      }
+
+      // Validate track audio data
+      if (typeof track.audioData !== 'string' || track.audioData.length < 10) {
+        console.error('❌ Invalid audio data for track:', track.name);
+        continue;
+      }
+
+      try {
+        console.log(`🔄 Processing track: ${track.name}, data length: ${track.audioData.length}`);
+        const buffer = await this.base64ToAudioBuffer(track.audioData, audioContext);
+        
+        // Validate buffer
+        if (!buffer || buffer.length === 0 || buffer.numberOfChannels === 0) {
+          console.error('❌ Invalid audio buffer for track:', track.name);
+          continue;
         }
+        
+        // Calculate track end time including its position on timeline
+        const trackStartTime = (track as any).startTime || 0;
+        const trackEndTime = trackStartTime + buffer.duration;
+        maxDuration = Math.max(maxDuration, trackEndTime);
+        
+        validTracks.push({ track, buffer });
+        console.log(`✅ Loaded track: ${track.name}, duration: ${buffer.duration}s, position: ${trackStartTime}s`);
+      } catch (error) {
+        console.error(`❌ Failed to load audio data for track ${track.name}:`, error);
+        continue; // Skip this track but continue with others
       }
     }
 
-    if (audioBuffers.length === 0) {
-      throw new Error('No valid audio tracks to mix');
+    if (validTracks.length === 0) {
+      throw new Error('No valid audio tracks found to mix. Please check your audio data.');
     }
 
-    // Create output buffer
+    // Ensure minimum duration
+    maxDuration = Math.max(maxDuration, 1.0);
+
+    // Create output buffer with validation
     const sampleRate = audioContext.sampleRate;
-    const frameCount = Math.ceil(maxDuration * sampleRate);
-    const numberOfChannels = 2; // Stereo output
+    const outputChannels = 2; // Stereo
+    const outputLength = Math.ceil(maxDuration * sampleRate);
     
-    const outputBuffer = audioContext.createBuffer(numberOfChannels, frameCount, sampleRate);
+    if (outputLength <= 0 || outputLength > sampleRate * 3600) { // Max 1 hour
+      throw new Error(`Invalid output length: ${outputLength} samples`);
+    }
     
-    // Mix all tracks
-    for (let channel = 0; channel < numberOfChannels; channel++) {
+    const outputBuffer = audioContext.createBuffer(outputChannels, outputLength, sampleRate);
+
+    // Mix all valid tracks
+    for (let channel = 0; channel < outputChannels; channel++) {
       const outputData = outputBuffer.getChannelData(channel);
       
-      for (let i = 0; i < audioBuffers.length; i++) {
-        const track = tracks.filter(t => !t.isMuted)[i];
-        const buffer = audioBuffers[i];
-        
-        if (!track || !buffer) continue;
-        
-        const sourceChannel = Math.min(channel, buffer.numberOfChannels - 1);
-        const sourceData = buffer.getChannelData(sourceChannel);
-        const volume = track.volume || 1;
-        
-        for (let sample = 0; sample < Math.min(outputData.length, sourceData.length); sample++) {
-          outputData[sample] += sourceData[sample] * volume;
-        }
-      }
-      
-      // Normalize to prevent clipping
-      let maxValue = 0;
-      for (let sample = 0; sample < outputData.length; sample++) {
-        maxValue = Math.max(maxValue, Math.abs(outputData[sample]));
-      }
-      
-      if (maxValue > 1) {
-        for (let sample = 0; sample < outputData.length; sample++) {
-          outputData[sample] /= maxValue;
+      for (const { track, buffer } of validTracks) {
+        try {
+          // Calculate start position in samples
+          const startSample = Math.floor(((track as any).startTime || 0) * sampleRate);
+          
+          // Get input data (use mono for both channels if input is mono)
+          const inputData = buffer.getChannelData(Math.min(channel, buffer.numberOfChannels - 1));
+          
+          // Mix the audio data with bounds checking
+          for (let sample = 0; sample < inputData.length && (startSample + sample) < outputLength; sample++) {
+            const outputIndex = startSample + sample;
+            if (outputIndex >= 0 && outputIndex < outputData.length) {
+              // Apply volume and mix with clipping protection
+              const mixedValue = outputData[outputIndex] + (inputData[sample] * (track.volume || 1.0));
+              outputData[outputIndex] = Math.max(-1, Math.min(1, mixedValue));
+            }
+          }
+        } catch (error) {
+          console.error(`❌ Error mixing track ${track.name}:`, error);
         }
       }
     }
-    
+
+    console.log(`✅ Successfully mixed ${validTracks.length} tracks into ${maxDuration.toFixed(2)}s output`);
     return outputBuffer;
   }
 

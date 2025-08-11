@@ -19,6 +19,7 @@ import { Mic, Play, Pause, Square, Upload, Save, Download, FolderOpen, Volume2, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Project, AudioTrack } from '@/services/ProjectManager';
 import { SimpleFallback } from '@/components/SimpleFallback';
+import { PlatformIndicator } from '@/components/PlatformIndicator';
 
 export function RecordingStudio() {
   console.log('RecordingStudio component initializing...');
@@ -629,45 +630,65 @@ export function RecordingStudio() {
   };
 
   const exportProject = async () => {
-    if (tracks.length === 0) {
-      toast({
-        title: "Nothing to export",
-        description: "Please add some audio tracks first.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
-      // Use pre-calculated unmuted tracks
+      console.log('🚀 Starting project export...');
       
-      if (unmutedTracks.length === 0) {
+      if (!currentProject || currentProject.tracks.length === 0) {
         toast({
-          title: "Nothing to export",
-          description: "All tracks are muted. Please unmute some tracks first.",
-          variant: "destructive",
+          title: "Export Error",
+          description: "No tracks to export",
+          variant: "destructive"
         });
         return;
       }
 
-      toast({
-        title: "Mixing tracks...",
-        description: "Creating your final audio file.",
-      });
+      // Validate tracks have audio data
+      const validTracks = currentProject.tracks.filter(track => track.audioData && track.audioData.length > 0);
+      if (validTracks.length === 0) {
+        toast({
+          title: "Export Error",
+          description: "No tracks contain audio data",
+          variant: "destructive"
+        });
+        return;
+      }
 
-      const mixedAudioBuffer = await AudioMixer.mixTracks(unmutedTracks);
-      const wavArrayBuffer = AudioMixer.audioBufferToWav(mixedAudioBuffer);
-      const audioData = AudioMixer.arrayBufferToBase64(wavArrayBuffer);
+      console.log(`📊 Exporting ${validTracks.length} of ${currentProject.tracks.length} tracks`);
+
+      // Mix all tracks with enhanced error handling
+      const mixedBuffer = await AudioMixer.mixTracks(validTracks);
       
-      // Share using device share functionality
-      await ProjectManager.shareAudioFile(audioData, `${projectName}.wav`);
+      if (!mixedBuffer || mixedBuffer.length === 0) {
+        throw new Error('Mixed audio buffer is empty');
+      }
+      
+      console.log(`🎵 Mixed buffer: ${mixedBuffer.duration}s, ${mixedBuffer.numberOfChannels} channels`);
+      
+      // Convert to WAV with validation
+      const wavData = AudioMixer.audioBufferToWav(mixedBuffer);
+      if (!wavData || wavData.byteLength === 0) {
+        throw new Error('WAV conversion failed');
+      }
+      
+      const base64Audio = AudioMixer.arrayBufferToBase64(wavData);
+      if (!base64Audio || base64Audio.length === 0) {
+        throw new Error('Base64 conversion failed');
+      }
+      
+      console.log(`📦 WAV data size: ${wavData.byteLength} bytes, Base64 size: ${base64Audio.length} chars`);
+      
+      // Share the file
+      const fileName = `${currentProject.name.replace(/\s+/g, '_')}_export.wav`;
+      await ProjectManager.shareAudioFile(base64Audio, fileName);
       
       toast({
-        title: "Export complete!",
-        description: "Your mixed audio is ready to share!",
+        title: "Export Successful",
+        description: `${fileName} has been exported successfully`,
       });
+      
+      console.log('✅ Export completed successfully');
     } catch (error) {
-      console.error('Error exporting project:', error);
+      console.error('❌ Export failed:', error);
       toast({
         title: "Export failed",
         description: "Could not export the project.",
@@ -790,6 +811,7 @@ export function RecordingStudio() {
               <FolderOpen className="w-4 h-4 mr-2" />
               Projects
             </Button>
+            <PlatformIndicator />
           </div>
         </div>
 

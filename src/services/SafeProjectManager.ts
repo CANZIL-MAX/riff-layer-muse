@@ -188,33 +188,89 @@ class SafeProjectManagerService {
   }
 
   async shareAudioFile(audioData: string, fileName: string): Promise<void> {
-    console.log('Sharing audio file:', fileName);
     try {
-      // Remove data URL prefix if present
-      const base64Data = audioData.replace(/^data:audio\/[^;]+;base64,/, '');
+      console.log('🎵 Attempting to share audio file:', fileName);
+      console.log('📊 Audio data length:', audioData?.length || 0);
       
-      // Convert base64 to binary
-      const binaryString = atob(base64Data);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
+      if (!audioData) {
+        throw new Error('No audio data provided for export');
+      }
+
+      // Handle different audio data formats
+      let processedData: string;
+      if (audioData.startsWith('data:')) {
+        // Remove data URL prefix if present
+        processedData = audioData.replace(/^data:audio\/[^;]+;base64,/, '');
+      } else {
+        // Assume it's already base64
+        processedData = audioData;
+      }
+
+      // Validate base64 format
+      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(processedData)) {
+        throw new Error('Invalid base64 audio data format');
       }
       
-      // Create blob with proper audio data
-      const blob = new Blob([bytes], { type: 'audio/wav' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      try {
+        // Decode base64 to bytes with better error handling
+        const binaryString = atob(processedData);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        // Validate audio data size
+        if (bytes.length < 100) {
+          throw new Error('Audio data appears to be corrupted or too small');
+        }
+        
+        // Create blob and download
+        const blob = new Blob([bytes], { type: 'audio/wav' });
+        
+        if (this.isCapacitorAvailable && window.Capacitor?.isNativePlatform?.()) {
+          // Try native sharing first
+          try {
+            const { Share } = await import('@capacitor/share');
+            // Convert to base64 for native sharing
+            const reader = new FileReader();
+            reader.onload = async () => {
+              const base64 = (reader.result as string).split(',')[1];
+              await Share.share({
+                title: 'Audio Export',
+                text: `Exported audio: ${fileName}`,
+                url: `data:audio/wav;base64,${base64}`,
+                dialogTitle: 'Share Audio File'
+              });
+            };
+            reader.readAsDataURL(blob);
+            console.log('✅ Native share initiated');
+            return;
+          } catch (shareError) {
+            console.warn('⚠️ Native share failed, falling back to download:', shareError);
+          }
+        }
+        
+        // Fallback to browser download
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        console.log('✅ Audio file download initiated successfully');
+        
+      } catch (decodeError) {
+        console.error('❌ Failed to decode audio data:', decodeError);
+        throw new Error(`Failed to process audio data: ${decodeError.message}`);
+      }
       
-      console.log('Audio file export completed successfully');
     } catch (error) {
-      console.error('Error sharing audio file:', error);
-      throw new Error('Failed to export audio file');
+      console.error('❌ Failed to share audio file:', error);
+      throw new Error(`Export failed: ${error.message}`);
     }
   }
 
