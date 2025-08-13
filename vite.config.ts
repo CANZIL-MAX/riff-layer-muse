@@ -39,6 +39,6 @@ export default defineConfig(({ mode }) => ({
   define: {
     // Ensure proper environment detection for native apps
     'process.env.NODE_ENV': JSON.stringify(mode),
-    '__CAPACITOR__': 'typeof window !== "undefined" && window.Capacitor'
+    '__CAPACITOR__': '"typeof window !== \\"undefined\\" && window.Capacitor"'
   }
 }));
