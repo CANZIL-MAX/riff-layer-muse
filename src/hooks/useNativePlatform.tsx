@@ -1,5 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Capacitor } from '@capacitor/core';
+
+// Safe Capacitor import with fallback
+let Capacitor: any = null;
+try {
+  Capacitor = require('@capacitor/core').Capacitor;
+} catch (error) {
+  console.warn('Capacitor not available, using web fallback:', error);
+  Capacitor = {
+    isNativePlatform: () => false,
+    getPlatform: () => 'web'
+  };
+}
 
 declare global {
   interface Window {
@@ -24,20 +35,35 @@ export const useNativePlatform = () => {
 
   useEffect(() => {
     const checkPlatform = () => {
-      const isCapacitorAvailable = typeof window !== 'undefined' && !!window.Capacitor;
-      const isNative = Capacitor.isNativePlatform();
-      const platform = Capacitor.getPlatform();
-      
-      // Check storage mode
-      let storageMode: 'native' | 'memory' | 'unknown' = 'unknown';
+      let isCapacitorAvailable = false;
+      let isNative = false;
+      let platform = 'web';
+      let storageMode: 'native' | 'memory' | 'unknown' = 'memory';
+
       try {
-        if (isCapacitorAvailable && isNative) {
-          storageMode = 'native';
-        } else {
-          storageMode = 'memory';
+        isCapacitorAvailable = typeof window !== 'undefined' && !!window.Capacitor && !!Capacitor;
+        
+        if (isCapacitorAvailable && Capacitor) {
+          isNative = Capacitor.isNativePlatform();
+          platform = Capacitor.getPlatform();
+          
+          if (isNative) {
+            storageMode = 'native';
+          }
         }
+        
+        console.log('✅ Platform detection successful:', {
+          isNative,
+          platform,
+          isCapacitorAvailable,
+          storageMode
+        });
+        
       } catch (error) {
-        console.warn('Could not determine storage mode:', error);
+        console.warn('⚠️ Platform detection error, using web fallback:', error);
+        isCapacitorAvailable = false;
+        isNative = false;
+        platform = 'web';
         storageMode = 'memory';
       }
 
@@ -49,16 +75,21 @@ export const useNativePlatform = () => {
       });
 
       // Log platform info for debugging
-      console.log('🔍 Platform Detection:', {
+      console.log('🔍 Final Platform Info:', {
         isNative,
         platform,
         isCapacitorAvailable,
         storageMode,
-        userAgent: navigator.userAgent
+        userAgent: navigator.userAgent,
+        capacitorObject: !!window.Capacitor,
+        capacitorImport: !!Capacitor
       });
     };
 
-    checkPlatform();
+    // Wrap in timeout to ensure window is ready
+    const timeoutId = setTimeout(checkPlatform, 100);
+    
+    return () => clearTimeout(timeoutId);
   }, []);
 
   return platformInfo;

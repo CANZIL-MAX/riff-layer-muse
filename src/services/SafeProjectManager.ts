@@ -1,5 +1,29 @@
-import { Capacitor } from '@capacitor/core';
-import { Filesystem, Directory } from '@capacitor/filesystem';
+// Safe imports with fallbacks
+let Capacitor: any = null;
+let Filesystem: any = null;
+let Directory: any = null;
+
+try {
+  const capacitorCore = require('@capacitor/core');
+  Capacitor = capacitorCore.Capacitor;
+  
+  const filesystemPlugin = require('@capacitor/filesystem');
+  Filesystem = filesystemPlugin.Filesystem;
+  Directory = filesystemPlugin.Directory;
+  
+  console.log('✅ Capacitor modules loaded successfully');
+} catch (error) {
+  console.warn('⚠️ Capacitor modules not available, using fallbacks:', error);
+  
+  Capacitor = {
+    isNativePlatform: () => false,
+    getPlatform: () => 'web'
+  };
+  
+  Filesystem = null;
+  Directory = null;
+}
+
 import { Project, AudioTrack } from './ProjectManager';
 
 class SafeProjectManagerService {
@@ -8,14 +32,22 @@ class SafeProjectManagerService {
   private memoryProjects: Map<string, Project> = new Map();
 
   async initialize() {
-    console.log('SafeProjectManager initializing...');
+    console.log('🚀 SafeProjectManager initializing...');
     
     try {
-      this.isCapacitorAvailable = Capacitor.isNativePlatform();
-      console.log('Capacitor native platform:', this.isCapacitorAvailable);
+      // Safe Capacitor availability check
+      if (Capacitor && typeof Capacitor.isNativePlatform === 'function') {
+        this.isCapacitorAvailable = Capacitor.isNativePlatform();
+        console.log('📱 Capacitor native platform detected:', this.isCapacitorAvailable);
+      } else {
+        this.isCapacitorAvailable = false;
+        console.log('🌐 Running in web mode - Capacitor not available');
+      }
 
-      if (this.isCapacitorAvailable) {
+      if (this.isCapacitorAvailable && Filesystem && Directory) {
         try {
+          console.log('📁 Setting up native filesystem...');
+          
           // Try to create directories
           await Filesystem.mkdir({
             path: 'riff-layer-muse',
@@ -29,20 +61,25 @@ class SafeProjectManagerService {
             recursive: true
           });
           
-          console.log('Capacitor filesystem initialized successfully');
+          console.log('✅ Capacitor filesystem initialized successfully');
         } catch (error: any) {
-          console.warn('Capacitor filesystem initialization failed, falling back to memory:', error.message);
+          console.warn('⚠️ Capacitor filesystem initialization failed, falling back to memory:', error.message);
           this.isCapacitorAvailable = false;
         }
+      } else {
+        console.log('💾 Using memory storage mode');
       }
 
       this.isInitialized = true;
-      console.log('SafeProjectManager initialized with storage mode:', this.isCapacitorAvailable ? 'native' : 'memory');
+      console.log('✅ SafeProjectManager initialized with storage mode:', this.isCapacitorAvailable ? 'native' : 'memory');
+      
     } catch (error) {
-      console.error('SafeProjectManager initialization error:', error);
+      console.error('❌ SafeProjectManager initialization error:', error);
       this.isCapacitorAvailable = false;
-      this.isInitialized = true; // Still mark as initialized to continue
-      throw error;
+      this.isInitialized = true; // Still mark as initialized to continue in memory mode
+      
+      // Don't throw error, just continue with memory storage
+      console.log('🔄 Continuing with memory-only storage due to initialization error');
     }
   }
 

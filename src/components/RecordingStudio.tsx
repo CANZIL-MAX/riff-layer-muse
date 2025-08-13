@@ -118,29 +118,55 @@ export function RecordingStudio() {
 
   useEffect(() => {
     const initProject = async () => {
-      console.log('Starting RecordingStudio initialization...');
+      console.log('🚀 Starting RecordingStudio initialization...');
+      
+      const initTimeout = setTimeout(() => {
+        console.error('⏰ Initialization timeout - setting fallback state');
+        setInitError('Initialization timeout');
+        setIsInitialized(true);
+      }, 10000); // 10 second timeout
+      
       try {
-        console.log('Initializing ProjectManager...');
-        await ProjectManager.initialize();
-        console.log('ProjectManager initialized successfully');
+        // Initialize services with error boundaries
+        console.log('📦 Initializing ProjectManager...');
+        try {
+          await ProjectManager.initialize();
+          console.log('✅ ProjectManager initialized successfully');
+        } catch (pmError) {
+          console.warn('⚠️ ProjectManager initialization failed:', pmError);
+          // Continue anyway as it might work in fallback mode
+        }
         
-        console.log('Initializing PlaybackEngine...');
-        await PlaybackEngine.initialize();
-        console.log('PlaybackEngine initialized successfully');
+        console.log('🎵 Initializing PlaybackEngine...');
+        try {
+          await PlaybackEngine.initialize();
+          console.log('✅ PlaybackEngine initialized successfully');
+          
+          // Set up time update callback
+          PlaybackEngine.setOnTimeUpdate(setCurrentTime);
+        } catch (peError) {
+          console.warn('⚠️ PlaybackEngine initialization failed:', peError);
+          // Continue anyway
+        }
         
-        // Set up time update callback
-        PlaybackEngine.setOnTimeUpdate(setCurrentTime);
+        console.log('🥁 Initializing MetronomeEngine...');
+        try {
+          await MetronomeEngine.initialize();
+          console.log('✅ MetronomeEngine initialized successfully');
+        } catch (meError) {
+          console.warn('⚠️ MetronomeEngine initialization failed:', meError);
+          // Continue anyway
+        }
         
-        console.log('Initializing MetronomeEngine...');
-        await MetronomeEngine.initialize();
-        console.log('MetronomeEngine initialized successfully');
-        
+        // Create default project
+        console.log('📝 Creating default project...');
         const defaultProject = ProjectManager.createNewProject('My First Project');
-        console.log('Default project created:', defaultProject);
+        console.log('✅ Default project created:', defaultProject.name);
+        
         setCurrentProject(defaultProject);
         setProjectName(defaultProject.name);
         
-        // Load project settings
+        // Load project settings safely
         if (defaultProject.settings) {
           setBpm(defaultProject.settings.tempo || 120);
           setIsMetronomeEnabled(defaultProject.settings.metronomeEnabled || false);
@@ -148,37 +174,47 @@ export function RecordingStudio() {
           setSnapToGrid(defaultProject.settings.snapToGrid !== false);
         }
         
-        console.log('RecordingStudio initialization completed successfully');
+        clearTimeout(initTimeout);
+        console.log('🎉 RecordingStudio initialization completed successfully');
         setIsInitialized(true);
+        
       } catch (error) {
-        console.error('Failed to initialize RecordingStudio:', error);
+        clearTimeout(initTimeout);
+        console.error('❌ RecordingStudio initialization failed:', error);
+        
         const errorMessage = error instanceof Error ? error.message : 'Unknown initialization error';
-        setInitError(errorMessage);
+        console.log('🔄 Attempting fallback initialization...');
         
         // Try to create a minimal fallback project
         try {
-          console.log('Creating fallback project...');
           const fallbackProject = ProjectManager.createNewProject('Fallback Project');
           setCurrentProject(fallbackProject);
           setProjectName(fallbackProject.name);
           setIsInitialized(true);
-          console.log('Fallback project created successfully');
+          setInitError(`Limited mode: ${errorMessage}`);
+          
+          console.log('✅ Fallback project created successfully');
+          
+          toast({
+            title: "Limited Mode Active",
+            description: "Some features may be unavailable. App is running in fallback mode.",
+            variant: "destructive",
+          });
+          
         } catch (fallbackError) {
-          console.error('Failed to create fallback project:', fallbackError);
-          setInitError('Complete initialization failure');
+          console.error('❌ Complete initialization failure:', fallbackError);
+          setInitError('Complete initialization failure - please refresh the page');
+          setIsInitialized(true); // Still set to true to show error UI
         }
-        
-        toast({
-          title: "Initialization Warning",
-          description: errorMessage.includes('directory') 
-            ? "Storage not available, working in memory mode"
-            : "Some features may be limited",
-          variant: "destructive",
-        });
       }
     };
 
-    initProject();
+    // Add a small delay to ensure DOM is ready
+    const startTimeout = setTimeout(initProject, 100);
+    
+    return () => {
+      clearTimeout(startTimeout);
+    };
   }, [toast]);
 
   useEffect(() => {
