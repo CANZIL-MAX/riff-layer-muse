@@ -22,7 +22,6 @@ export default defineConfig(({ mode }) => ({
   build: {
     // Optimize for mobile native apps
     target: 'es2015',
-    minify: 'terser',
     sourcemap: false,
     rollupOptions: {
       output: {
