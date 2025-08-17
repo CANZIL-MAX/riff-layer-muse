@@ -11,6 +11,7 @@ interface WaveformDisplayProps {
   height: number;
   className?: string;
   zoomLevel?: number;
+  showProgressOverlay?: boolean;
 }
 
 export const WaveformDisplay = memo(function WaveformDisplay({ 
@@ -23,7 +24,8 @@ export const WaveformDisplay = memo(function WaveformDisplay({
   width, 
   height, 
   className = "",
-  zoomLevel = 1 
+  zoomLevel = 1,
+  showProgressOverlay = true
 }: WaveformDisplayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -158,9 +160,15 @@ export const WaveformDisplay = memo(function WaveformDisplay({
     ctx.stroke();
 
     // Draw playback progress indicator
-    if (isPlaying && !isMuted && currentTime >= trimStart && currentTime <= effectiveTrimEnd) {
+    if (showProgressOverlay && isPlaying && !isMuted && currentTime >= trimStart && currentTime <= effectiveTrimEnd) {
       const relativeTime = currentTime - trimStart;
       const progressX = (relativeTime / displayDuration) * width;
+      
+      // Progress overlay (black fill during recording)
+      if (showProgressOverlay) {
+        ctx.fillStyle = 'hsla(0, 0%, 0%, 0.8)';
+        ctx.fillRect(0, 0, progressX, height);
+      }
       
       // Playback line
       ctx.strokeStyle = 'hsl(var(--primary))';
@@ -169,10 +177,6 @@ export const WaveformDisplay = memo(function WaveformDisplay({
       ctx.moveTo(progressX, 0);
       ctx.lineTo(progressX, height);
       ctx.stroke();
-      
-      // Progress overlay
-      ctx.fillStyle = 'hsla(var(--primary), 0.1)';
-      ctx.fillRect(0, 0, progressX, height);
     }
 
   }, [audioBuffer, trimStart, trimEnd, currentTime, isPlaying, isMuted, width, height, zoomLevel]);

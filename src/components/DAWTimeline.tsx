@@ -3,7 +3,6 @@ import { AudioTrack } from '@/services/ProjectManager';
 import { TrackControls } from '@/components/TrackControls';
 import { WaveformBlock } from '@/components/WaveformBlock';
 import { MeasureRuler } from '@/components/MeasureRuler';
-import { BeatGrid } from '@/components/BeatGrid';
 import { ZoomControls } from '@/components/ZoomControls';
 import { useTimeline } from '@/hooks/useTimeline';
 import { useTimelineZoom } from '@/hooks/useTimelineZoom';
@@ -13,6 +12,7 @@ interface DAWTimelineProps {
   tracks: AudioTrack[];
   currentTime: number;
   isPlaying: boolean;
+  isRecording?: boolean;
   recordingStartTime: number;
   onRecordingStartTimeChange: (time: number) => void;
   onSeek: (time: number) => void;
@@ -32,6 +32,7 @@ export const DAWTimeline = memo(function DAWTimeline({
   tracks, 
   currentTime,
   isPlaying,
+  isRecording = false,
   recordingStartTime,
   onRecordingStartTimeChange,
   onSeek,
@@ -175,15 +176,19 @@ export const DAWTimeline = memo(function DAWTimeline({
           {/* Scrollable timeline container */}
           <div 
             ref={scrollContainerRef}
-            className="flex-1 overflow-hidden touch-pan-x"
+            className="flex-1 overflow-auto"
+            style={{ 
+              touchAction: 'manipulation',
+              WebkitOverflowScrolling: 'touch'
+            }}
             onWheel={handleWheel}
           >
             {/* Timeline content */}
             <div 
-              className="relative overflow-x-auto overflow-y-hidden h-full"
+              className="relative"
               style={{ 
-                width: `100%`,
-                minWidth: `${baseTimelineWidth}px`
+                width: `${zoomedWidth}px`,
+                minHeight: `${Math.max(300, tracks.length * 70 + 100)}px`
               }}
               onScroll={(e) => {
                 const newScrollPosition = e.currentTarget.scrollLeft;
@@ -192,42 +197,29 @@ export const DAWTimeline = memo(function DAWTimeline({
                 }
               }}
             >
-              {/* Measure ruler - now inside scrollable area */}
-              <div 
-                className="relative"
-                style={{ 
-                  width: `${zoomedWidth}px`,
-                  transform: `translateX(-${scrollPosition}px)`
-                }}
-              >
-                <MeasureRuler 
-                  timelineWidth={zoomedWidth} 
-                  totalDuration={totalDuration}
-                  bpm={bpm}
-                />
-              </div>
+              {/* Measure ruler */}
+              <MeasureRuler 
+                timelineWidth={zoomedWidth} 
+                totalDuration={totalDuration}
+                bpm={bpm}
+                onTimeSelect={onSeek}
+                showBeatLines={false}
+              />
 
               <div 
                 ref={timelineRef}
                 data-timeline
-                className="relative bg-timeline/30 cursor-pointer min-h-[200px]"
-                style={{ width: `${zoomedWidth}px`, transform: `translateX(-${scrollPosition}px)` }}
+                className="relative bg-timeline/30 cursor-pointer"
+                style={{ width: `${zoomedWidth}px` }}
                 onClick={handleTimelineClick}
               >
-                {/* Beat Grid - now inside timeline */}
-                <BeatGrid
-                  timelineWidth={zoomedWidth}
-                  totalDuration={totalDuration}
-                  bpm={bpm}
-                  timeToPixels={timeToPixels}
-                  showGrid={true}
-                  subdivision={4}
-                  zoomLevel={zoomLevel}
-                />
                 {/* Current playback position */}
                 <div
-                  className="absolute top-0 w-0.5 h-full bg-primary z-30 pointer-events-none"
-                  style={{ left: `${timeToPixels(currentTime)}px` }}
+                  className="absolute top-8 w-0.5 bg-primary z-30 pointer-events-none"
+                  style={{ 
+                    left: `${timeToPixels(currentTime)}px`,
+                    height: `${Math.max(200, tracks.length * 70)}px`
+                  }}
                 >
                   <div className="absolute -top-1 -left-1.5 w-3 h-3 bg-primary rounded-full shadow-glow" />
                 </div>
@@ -235,8 +227,11 @@ export const DAWTimeline = memo(function DAWTimeline({
                 {/* Recording start position cursor */}
                 {recordingStartTime > 0 && (
                   <div
-                    className="absolute top-0 w-0.5 h-full bg-recording z-30"
-                    style={{ left: `${timeToPixels(recordingStartTime)}px` }}
+                    className="absolute top-8 w-0.5 bg-recording z-30"
+                    style={{ 
+                      left: `${timeToPixels(recordingStartTime)}px`,
+                      height: `${Math.max(200, tracks.length * 70)}px`
+                    }}
                   >
                     <div className="absolute -top-1 -left-1.5 w-3 h-3 bg-recording rounded-full shadow-recording" />
                     <div className="absolute -top-6 -left-8 text-xs bg-recording text-recording-foreground px-2 py-1 rounded whitespace-nowrap">
@@ -265,6 +260,8 @@ export const DAWTimeline = memo(function DAWTimeline({
                           snapToGrid={snapToGrid}
                           scrollOffset={scrollPosition}
                           zoomLevel={zoomLevel}
+                  isRecording={isRecording}
+                  showProgressOverlay={!isRecording || !!track.isRecording}
                         />
                       )}
                     </div>

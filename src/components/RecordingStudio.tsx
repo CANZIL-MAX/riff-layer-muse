@@ -715,12 +715,23 @@ export function RecordingStudio() {
       
       // Share the file
       const fileName = `${currentProject.name.replace(/\s+/g, '_')}_export.wav`;
-      await ProjectManager.shareAudioFile(base64Audio, fileName);
       
-      toast({
-        title: "Export Successful",
-        description: `${fileName} has been exported successfully`,
-      });
+      try {
+        await ProjectManager.shareAudioFile(base64Audio, fileName);
+        
+        toast({
+          title: "Export Successful",
+          description: `${fileName} has been exported successfully`,
+        });
+      } catch (shareError) {
+        // If user cancels the share dialog, don't show error message
+        if (shareError instanceof Error && shareError.message.includes('cancelled')) {
+          return; // Silent return for cancellation
+        }
+        
+        // For other errors, show error message
+        throw shareError;
+      }
       
       console.log('✅ Export completed successfully');
     } catch (error) {
@@ -1023,6 +1034,7 @@ export function RecordingStudio() {
           tracks={tracks}
           currentTime={currentTime}
           isPlaying={isPlaying}
+          isRecording={isRecording}
           recordingStartTime={recordingStartTime}
           onRecordingStartTimeChange={setRecordingStartTime}
           onSeek={handleSeek}

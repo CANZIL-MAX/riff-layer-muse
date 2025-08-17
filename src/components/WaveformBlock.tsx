@@ -15,6 +15,8 @@ interface WaveformBlockProps {
   snapToGrid?: boolean;
   scrollOffset?: number;
   zoomLevel?: number;
+  isRecording?: boolean;
+  showProgressOverlay?: boolean;
 }
 
 export function WaveformBlock({
@@ -29,6 +31,8 @@ export function WaveformBlock({
   snapToGrid = true,
   scrollOffset = 0,
   zoomLevel = 1,
+  isRecording = false,
+  showProgressOverlay = true,
 }: WaveformBlockProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState<'start' | 'end' | false>(false);
@@ -176,6 +180,7 @@ export function WaveformBlock({
             trimStart={trimStart}
             trimEnd={trimEnd}
             zoomLevel={zoomLevel}
+            showProgressOverlay={showProgressOverlay}
           />
         ) : (
           <div className="flex items-center justify-center h-full text-primary-foreground text-xs">
