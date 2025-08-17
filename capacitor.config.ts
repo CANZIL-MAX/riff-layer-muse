@@ -4,7 +4,7 @@ const config: CapacitorConfig = {
   appId: 'com.lovable.rifflayermuse',
   appName: 'riff-layer-muse',
   webDir: 'dist',
-  // Removed server config for offline native app
+  // Native app configuration - no server for offline operation
   plugins: {
     Filesystem: {
       directory: 'Documents'
