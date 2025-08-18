@@ -18,13 +18,28 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
   const enumerateDevices = async () => {
     setIsLoading(true);
     try {
+      // Check if mediaDevices is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.log('MediaDevices API not available');
+        throw new Error('MediaDevices API not supported');
+      }
+
+      console.log('Requesting microphone permissions...');
       // Request permissions first
       await navigator.mediaDevices.getUserMedia({ audio: true });
       
+      // Check if enumerateDevices is available
+      if (!navigator.mediaDevices.enumerateDevices) {
+        console.log('enumerateDevices not available');
+        throw new Error('Device enumeration not supported');
+      }
+
+      console.log('Enumerating devices...');
       // Get all audio input devices
       const allDevices = await navigator.mediaDevices.enumerateDevices();
       const audioInputs = allDevices.filter(device => device.kind === 'audioinput');
       
+      console.log(`Found ${audioInputs.length} audio input devices`);
       setDevices(audioInputs);
       
       // If no device is selected and we have devices, select the first one
@@ -46,15 +61,35 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
   useEffect(() => {
     enumerateDevices();
     
-    // Listen for device changes
+    // Listen for device changes - with compatibility check
     const handleDeviceChange = () => {
       enumerateDevices();
     };
     
-    navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+    let cleanup: (() => void) | null = null;
+    
+    if (navigator.mediaDevices) {
+      if (navigator.mediaDevices.addEventListener) {
+        // Modern browsers
+        console.log('Using addEventListener for device changes');
+        navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+        cleanup = () => {
+          navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+        };
+      } else if ('ondevicechange' in navigator.mediaDevices) {
+        // iOS Safari fallback
+        console.log('Using ondevicechange for device changes');
+        navigator.mediaDevices.ondevicechange = handleDeviceChange;
+        cleanup = () => {
+          navigator.mediaDevices.ondevicechange = null;
+        };
+      }
+    }
     
     return () => {
-      navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+      if (cleanup) {
+        cleanup();
+      }
     };
   }, []);
 
