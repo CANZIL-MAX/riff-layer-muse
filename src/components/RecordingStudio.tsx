@@ -19,7 +19,7 @@ import { Mic, Play, Pause, Square, Upload, Save, Download, FolderOpen, Volume2, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Project, AudioTrack } from '@/services/ProjectManager';
 import { SimpleFallback } from '@/components/SimpleFallback';
-import { PlatformIndicator } from '@/components/PlatformIndicator';
+
 
 export function RecordingStudio() {
   console.log('RecordingStudio component initializing...');
@@ -46,6 +46,8 @@ export function RecordingStudio() {
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [showCountIn, setShowCountIn] = useState(true);
   const [showAudioLayers, setShowAudioLayers] = useState(true);
+  const [latencyCompensation, setLatencyCompensation] = useState(0);
+  const [soloTracks, setSoloTracks] = useState<Set<string>>(new Set());
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -73,6 +75,16 @@ export function RecordingStudio() {
         await ProjectManager.saveProject(updatedProject);
         setCurrentProject(updatedProject);
       }
+    },
+
+    toggleTrackSolo: async (trackId: string) => {
+      const newSoloTracks = new Set(soloTracks);
+      if (newSoloTracks.has(trackId)) {
+        newSoloTracks.delete(trackId);
+      } else {
+        newSoloTracks.add(trackId);
+      }
+      setSoloTracks(newSoloTracks);
     },
 
     updateTrackName: async (trackId: string, newName: string) => {
@@ -108,13 +120,18 @@ export function RecordingStudio() {
         setCurrentProject(updatedProject);
       }
     }
-  }), [tracks, currentProject]);
+  }), [tracks, currentProject, soloTracks]);
 
-  // Memoize unmuted tracks to avoid recalculation
-  const unmutedTracks = useMemo(() => 
-    tracks.filter(track => !track.isMuted && track.audioData), 
-    [tracks]
-  );
+  // Memoize playable tracks based on mute/solo state
+  const playableTracks = useMemo(() => {
+    if (soloTracks.size > 0) {
+      // If any tracks are soloed, only play soloed tracks
+      return tracks.filter(track => soloTracks.has(track.id) && track.audioData);
+    } else {
+      // Otherwise, play all non-muted tracks
+      return tracks.filter(track => !track.isMuted && track.audioData);
+    }
+  }, [tracks, soloTracks]);
 
   useEffect(() => {
     const initProject = async () => {
@@ -310,13 +327,29 @@ export function RecordingStudio() {
         await MetronomeEngine.playCountIn(1);
       }
       
-      // Get user media with selected device
+      // Detect and compensate for latency (especially AirPods)
+      const audioContext = audioContextRef.current || new AudioContext();
+      const latency = audioContext.baseLatency || 0;
+      const outputLatency = (audioContext as any).outputLatency || 0;
+      const totalLatency = latency + outputLatency;
+      
+      // Estimate additional latency for Bluetooth devices (like AirPods)
+      const estimatedBluetoothLatency = selectedDeviceId?.includes('airpods') || 
+                                       selectedDeviceId?.includes('bluetooth') ? 0.15 : 0;
+      
+      const compensatedLatency = totalLatency + estimatedBluetoothLatency;
+      setLatencyCompensation(compensatedLatency);
+      
+      console.log('Detected latency:', { totalLatency, estimatedBluetoothLatency, compensatedLatency });
+
+      // Get user media with selected device and optimized settings for iOS
       const constraints: MediaStreamConstraints = { 
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: false, // Disable for better latency
+          noiseSuppression: false, // Disable for better latency  
+          autoGainControl: false, // Disable for better latency
           sampleRate: 44100,
+          channelCount: 1, // Mono for better performance
           ...(selectedDeviceId && { deviceId: { exact: selectedDeviceId } })
         } 
       };
@@ -334,24 +367,24 @@ export function RecordingStudio() {
       
       // Start playing existing tracks if withPlayback is true and tracks exist
       if (withPlayback) {
-        const unmutedTracks = tracks.filter(track => !track.isMuted && track.audioData);
-        unmutedTracksCount = unmutedTracks.length;
-        if (unmutedTracks.length > 0) {
-          await PlaybackEngine.playTracks(unmutedTracks, currentTime);
+        unmutedTracksCount = playableTracks.length;
+        if (playableTracks.length > 0) {
+          // Play at full volume, no ducking during recording
+          await PlaybackEngine.playTracks(playableTracks, currentTime);
           setIsPlaying(true);
         }
       }
 
-      // Create MediaRecorder with proper options
+      // Create MediaRecorder with proper options for iOS
       const options: MediaRecorderOptions = {};
       
-      // Try to use WAV format if supported, fallback to webm
-      if (MediaRecorder.isTypeSupported('audio/wav')) {
+      // Prefer MP4 for iOS/iPhone, then fallback to other formats
+      if (MediaRecorder.isTypeSupported('audio/mp4')) {
+        options.mimeType = 'audio/mp4';
+      } else if (MediaRecorder.isTypeSupported('audio/wav')) {
         options.mimeType = 'audio/wav';
       } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
         options.mimeType = 'audio/webm;codecs=opus';
-      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-        options.mimeType = 'audio/mp4';
       }
 
       const mediaRecorder = new MediaRecorder(stream, options);
@@ -434,7 +467,9 @@ export function RecordingStudio() {
             // Add data URL prefix for proper format
             const dataUrl = `data:audio/wav;base64,${base64Data}`;
             
-            // Create new track
+            // Create new track with latency compensation
+            const compensatedStartTime = Math.max(0, recordingStartTime - latencyCompensation);
+            
             const newTrack = {
               id: Date.now().toString(),
               name: recordingName || `Recording ${tracks.length + 1}`,
@@ -443,7 +478,9 @@ export function RecordingStudio() {
               isMuted: false,
               volume: 1,
               duration: audioBuffer.duration,
-              startTime: recordingStartTime, // Track when recording started on timeline
+              startTime: compensatedStartTime, // Apply latency compensation
+              trimStart: 0,
+              trimEnd: audioBuffer.duration
             };
 
             // Add track to current tracks
@@ -463,8 +500,8 @@ export function RecordingStudio() {
 
             setRecordingName('');
             
-            toast({
-              title: "Recording Saved",
+      toast({
+        title: "Recording Saved",
               description: `Track "${newTrack.name}" has been added to your project`,
             });
           } catch (error) {
@@ -633,11 +670,11 @@ export function RecordingStudio() {
       MetronomeEngine.stop();
       setIsPlaying(false);
     } else {
-      if (unmutedTracks.length > 0) {
+      if (playableTracks.length > 0) {
         if (isMetronomeEnabled) {
           await MetronomeEngine.start();
         }
-        await PlaybackEngine.playTracks(unmutedTracks, currentTime);
+        await PlaybackEngine.playTracks(playableTracks, currentTime);
         setIsPlaying(true);
       } else {
         toast({
@@ -858,7 +895,6 @@ export function RecordingStudio() {
               <FolderOpen className="w-4 h-4 mr-2" />
               Projects
             </Button>
-            <PlatformIndicator />
           </div>
         </div>
 
@@ -1039,7 +1075,7 @@ export function RecordingStudio() {
           onRecordingStartTimeChange={setRecordingStartTime}
           onSeek={handleSeek}
           onToggleTrackMute={memoizedCallbacks.toggleTrackMute}
-          onToggleTrackSolo={() => {}} // TODO: Implement solo functionality
+          onToggleTrackSolo={memoizedCallbacks.toggleTrackSolo}
           onToggleTrackRecord={() => {}} // TODO: Implement track recording
           onTrackVolumeChange={(trackId, volume) => {
             const updatedTracks = tracks.map(track => 
@@ -1052,6 +1088,7 @@ export function RecordingStudio() {
           bpm={bpm}
           snapToGrid={snapToGrid}
           onScrollToTime={setScrollToTimeFunction}
+          soloTracks={soloTracks}
           onTrackUpdate={async (trackId, updates) => {
             console.log('Track update called:', trackId, updates);
             
@@ -1079,9 +1116,11 @@ export function RecordingStudio() {
             if (isPlaying) {
               console.log('Restarting playback due to track update');
               PlaybackEngine.stop();
-              const unmutedTracks = updatedTracks.filter(track => !track.isMuted && track.audioData);
-              if (unmutedTracks.length > 0) {
-                await PlaybackEngine.playTracks(unmutedTracks, currentTime);
+              const newPlayableTracks = soloTracks.size > 0 
+                ? updatedTracks.filter(track => soloTracks.has(track.id) && track.audioData)
+                : updatedTracks.filter(track => !track.isMuted && track.audioData);
+              if (newPlayableTracks.length > 0) {
+                await PlaybackEngine.playTracks(newPlayableTracks, currentTime);
               }
             }
             

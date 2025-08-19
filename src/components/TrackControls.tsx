@@ -23,6 +23,8 @@ interface TrackControlsProps {
   onVolumeChange: (trackId: string, volume: number) => void;
   onRemove: (trackId: string) => void;
   onUpdateTrackName: (trackId: string, name: string) => void;
+  isSoloed?: boolean;
+  hasSoloedTracks?: boolean;
 }
 
 export function TrackControls({
@@ -34,6 +36,8 @@ export function TrackControls({
   onVolumeChange,
   onRemove,
   onUpdateTrackName,
+  isSoloed = false,
+  hasSoloedTracks = false,
 }: TrackControlsProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState(track.name);
@@ -99,7 +103,7 @@ export function TrackControls({
           size="sm"
           onClick={() => onToggleMute(track.id)}
           className={`h-6 w-8 text-xs font-bold ${
-            track.isMuted 
+            track.isMuted || (hasSoloedTracks && !isSoloed)
               ? "bg-destructive text-destructive-foreground" 
               : "hover:bg-muted text-muted-foreground"
           }`}
@@ -113,7 +117,7 @@ export function TrackControls({
           size="sm"
           onClick={() => onToggleSolo(track.id)}
           className={`h-6 w-8 text-xs font-bold ${
-            track.isSolo 
+            isSoloed
               ? "bg-accent text-accent-foreground" 
               : "hover:bg-muted text-muted-foreground"
           }`}

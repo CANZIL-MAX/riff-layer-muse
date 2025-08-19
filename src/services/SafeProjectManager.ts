@@ -1,33 +1,30 @@
-// Safe imports with fallbacks
-let Capacitor: any = null;
-let Filesystem: any = null;
-let Directory: any = null;
+// ESM imports with fallbacks for better mobile support
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+
+let isCapacitorAvailable = false;
+let FilesystemAPI: any = null;
+let DirectoryAPI: any = null;
 
 try {
-  const capacitorCore = require('@capacitor/core');
-  Capacitor = capacitorCore.Capacitor;
-  
-  const filesystemPlugin = require('@capacitor/filesystem');
-  Filesystem = filesystemPlugin.Filesystem;
-  Directory = filesystemPlugin.Directory;
-  
-  console.log('✅ Capacitor modules loaded successfully');
+  // Check if Capacitor is available and native
+  if (Capacitor && Capacitor.isNativePlatform()) {
+    FilesystemAPI = Filesystem;
+    DirectoryAPI = Directory;
+    isCapacitorAvailable = true;
+    console.log('✅ Capacitor native filesystem available');
+  } else {
+    console.log('🌐 Running in web mode');
+  }
 } catch (error) {
-  console.warn('⚠️ Capacitor modules not available, using fallbacks:', error);
-  
-  Capacitor = {
-    isNativePlatform: () => false,
-    getPlatform: () => 'web'
-  };
-  
-  Filesystem = null;
-  Directory = null;
+  console.warn('⚠️ Capacitor not available:', error);
+  isCapacitorAvailable = false;
 }
 
 import { Project, AudioTrack } from './ProjectManager';
 
 class SafeProjectManagerService {
-  private isCapacitorAvailable = false;
+  private isCapacitorAvailable = isCapacitorAvailable;
   private isInitialized = false;
   private memoryProjects: Map<string, Project> = new Map();
 
@@ -35,39 +32,34 @@ class SafeProjectManagerService {
     console.log('🚀 SafeProjectManager initializing...');
     
     try {
-      // Safe Capacitor availability check
-      if (Capacitor && typeof Capacitor.isNativePlatform === 'function') {
-        this.isCapacitorAvailable = Capacitor.isNativePlatform();
-        console.log('📱 Capacitor native platform detected:', this.isCapacitorAvailable);
-      } else {
-        this.isCapacitorAvailable = false;
-        console.log('🌐 Running in web mode - Capacitor not available');
-      }
+      this.isCapacitorAvailable = isCapacitorAvailable;
+      console.log('📱 Native platform detected:', this.isCapacitorAvailable);
 
-      if (this.isCapacitorAvailable && Filesystem && Directory) {
+      if (this.isCapacitorAvailable && FilesystemAPI && DirectoryAPI) {
         try {
           console.log('📁 Setting up native filesystem...');
           
           // Try to create directories
-          await Filesystem.mkdir({
+          await FilesystemAPI.mkdir({
             path: 'riff-layer-muse',
-            directory: Directory.Documents,
+            directory: DirectoryAPI.Documents,
             recursive: true
           });
           
-          await Filesystem.mkdir({
+          await FilesystemAPI.mkdir({
             path: 'riff-layer-muse/projects',
-            directory: Directory.Documents,
+            directory: DirectoryAPI.Documents,
             recursive: true
           });
           
           console.log('✅ Capacitor filesystem initialized successfully');
         } catch (error: any) {
-          console.warn('⚠️ Capacitor filesystem initialization failed, falling back to memory:', error.message);
+          console.warn('⚠️ Filesystem initialization failed, using memory:', error.message);
           this.isCapacitorAvailable = false;
         }
       } else {
         console.log('💾 Using memory storage mode');
+        this.isCapacitorAvailable = false;
       }
 
       this.isInitialized = true;
@@ -76,10 +68,8 @@ class SafeProjectManagerService {
     } catch (error) {
       console.error('❌ SafeProjectManager initialization error:', error);
       this.isCapacitorAvailable = false;
-      this.isInitialized = true; // Still mark as initialized to continue in memory mode
-      
-      // Don't throw error, just continue with memory storage
-      console.log('🔄 Continuing with memory-only storage due to initialization error');
+      this.isInitialized = true;
+      console.log('🔄 Continuing with memory-only storage');
     }
   }
 
@@ -112,19 +102,18 @@ class SafeProjectManagerService {
     // Always save to memory first
     this.memoryProjects.set(project.id, { ...project });
 
-    if (this.isCapacitorAvailable) {
+    if (this.isCapacitorAvailable && FilesystemAPI && DirectoryAPI) {
       try {
         const projectData = JSON.stringify(project, null, 2);
-        await Filesystem.writeFile({
+        await FilesystemAPI.writeFile({
           path: `riff-layer-muse/projects/${project.id}.json`,
           data: projectData,
-          directory: Directory.Documents,
+          directory: DirectoryAPI.Documents,
           encoding: 'utf8' as any
         });
         console.log('Project saved to filesystem successfully');
       } catch (error) {
         console.warn('Failed to save to filesystem, kept in memory:', error);
-        // Don't throw error, just continue with memory storage
       }
     }
   }
@@ -140,16 +129,16 @@ class SafeProjectManagerService {
     }
 
     // Try filesystem if available
-    if (this.isCapacitorAvailable) {
+    if (this.isCapacitorAvailable && FilesystemAPI && DirectoryAPI) {
       try {
-        const result = await Filesystem.readFile({
+        const result = await FilesystemAPI.readFile({
           path: `riff-layer-muse/projects/${projectId}.json`,
-          directory: Directory.Documents,
+          directory: DirectoryAPI.Documents,
           encoding: 'utf8' as any
         });
         
         const project = JSON.parse(result.data as string);
-        this.memoryProjects.set(projectId, project); // Cache in memory
+        this.memoryProjects.set(projectId, project);
         console.log('Loaded project from filesystem');
         return project;
       } catch (error) {
@@ -169,25 +158,25 @@ class SafeProjectManagerService {
     projects.push(...Array.from(this.memoryProjects.values()));
 
     // Try to get from filesystem if available and we don't have any in memory
-    if (this.isCapacitorAvailable && projects.length === 0) {
+    if (this.isCapacitorAvailable && FilesystemAPI && DirectoryAPI && projects.length === 0) {
       try {
-        const result = await Filesystem.readdir({
+        const result = await FilesystemAPI.readdir({
           path: 'riff-layer-muse/projects',
-          directory: Directory.Documents
+          directory: DirectoryAPI.Documents
         });
 
         for (const file of result.files) {
           if (file.name.endsWith('.json')) {
             try {
-              const projectData = await Filesystem.readFile({
+              const projectData = await FilesystemAPI.readFile({
                 path: `riff-layer-muse/projects/${file.name}`,
-                directory: Directory.Documents,
+                directory: DirectoryAPI.Documents,
                 encoding: 'utf8' as any
               });
               
               const project = JSON.parse(projectData.data as string);
               projects.push(project);
-              this.memoryProjects.set(project.id, project); // Cache in memory
+              this.memoryProjects.set(project.id, project);
             } catch (error) {
               console.warn(`Failed to load project ${file.name}:`, error);
             }
@@ -210,16 +199,15 @@ class SafeProjectManagerService {
     this.memoryProjects.delete(projectId);
 
     // Try to remove from filesystem
-    if (this.isCapacitorAvailable) {
+    if (this.isCapacitorAvailable && FilesystemAPI && DirectoryAPI) {
       try {
-        await Filesystem.deleteFile({
+        await FilesystemAPI.deleteFile({
           path: `riff-layer-muse/projects/${projectId}.json`,
-          directory: Directory.Documents
+          directory: DirectoryAPI.Documents
         });
         console.log('Project deleted from filesystem');
       } catch (error) {
         console.warn('Failed to delete from filesystem:', error);
-        // Don't throw error, memory deletion was successful
       }
     }
   }
@@ -264,23 +252,47 @@ class SafeProjectManagerService {
         // Create blob and download
         const blob = new Blob([bytes], { type: 'audio/wav' });
         
-        if (this.isCapacitorAvailable && window.Capacitor?.isNativePlatform?.()) {
-          // Try native sharing first
+        if (this.isCapacitorAvailable && Capacitor?.isNativePlatform?.()) {
+          // Try native sharing with enhanced iOS support
           try {
             const { Share } = await import('@capacitor/share');
-            // Convert to base64 for native sharing
-            const reader = new FileReader();
-            reader.onload = async () => {
-              const base64 = (reader.result as string).split(',')[1];
-              await Share.share({
-                title: 'Audio Export',
-                text: `Exported audio: ${fileName}`,
-                url: `data:audio/wav;base64,${base64}`,
-                dialogTitle: 'Share Audio File'
-              });
-            };
-            reader.readAsDataURL(blob);
-            console.log('✅ Native share initiated');
+            const { Directory, Filesystem } = await import('@capacitor/filesystem');
+            
+            // Write file to temporary directory for sharing
+            const tempFileName = `temp_${Date.now()}.wav`;
+            const base64Data = processedData;
+            
+            await Filesystem.writeFile({
+              path: tempFileName,
+              data: base64Data,
+              directory: Directory.Cache
+            });
+            
+            const fileUri = await Filesystem.getUri({
+              directory: Directory.Cache,
+              path: tempFileName
+            });
+            
+            await Share.share({
+              title: 'Share Audio Recording',
+              text: `Audio recording: ${fileName}`,
+              url: fileUri.uri,
+              dialogTitle: 'Choose export location'
+            });
+            
+            // Clean up temp file
+            setTimeout(async () => {
+              try {
+                await Filesystem.deleteFile({
+                  path: tempFileName,
+                  directory: Directory.Cache
+                });
+              } catch (cleanupError) {
+                console.warn('Failed to cleanup temp file:', cleanupError);
+              }
+            }, 5000);
+            
+            console.log('✅ Native share completed');
             return;
           } catch (shareError) {
             console.warn('⚠️ Native share failed, falling back to download:', shareError);

@@ -26,6 +26,9 @@ interface DAWTimelineProps {
   bpm?: number;
   snapToGrid?: boolean;
   onScrollToTime?: (scrollToTimeFunction: (time: number) => void) => void;
+  zoomLevel?: number;
+  showProgressOverlay?: boolean;
+  soloTracks?: Set<string>;
 }
 
 export const DAWTimeline = memo(function DAWTimeline({ 
@@ -45,7 +48,10 @@ export const DAWTimeline = memo(function DAWTimeline({
   onTrackUpdate,
   bpm = 120,
   snapToGrid = true,
-  onScrollToTime
+  onScrollToTime,
+  zoomLevel: zoomLevelProp,
+  showProgressOverlay = true,
+  soloTracks = new Set()
 }: DAWTimelineProps) {
   const timelineRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -150,6 +156,8 @@ export const DAWTimeline = memo(function DAWTimeline({
                     onVolumeChange={onTrackVolumeChange}
                     onRemove={onRemoveTrack}
                     onUpdateTrackName={onUpdateTrackName}
+                    isSoloed={soloTracks.has(track.id)}
+                    hasSoloedTracks={soloTracks.size > 0}
                   />
                 ))}
               </div>

@@ -131,11 +131,11 @@ export function WaveformBlock({
         
         onTrackUpdate(track.id, { startTime: newStartTime });
       } else if (action === 'resize-start') {
+        // Fixed trimming: trim start without moving the rest
         const newTrimStart = Math.max(0, Math.min(initialTrimStart + deltaTime, initialTrimEnd - 0.1));
-        const trimStartDelta = newTrimStart - initialTrimStart;
-        const newStartTime = Math.max(0, initialStartTime + trimStartDelta);
-        onTrackUpdate(track.id, { trimStart: newTrimStart, startTime: newStartTime });
+        onTrackUpdate(track.id, { trimStart: newTrimStart });
       } else if (action === 'resize-end') {
+        // Fixed trimming: trim end without moving the rest
         const newTrimEnd = Math.max(initialTrimStart + 0.1, Math.min(initialTrimEnd + deltaTime, track.duration));
         onTrackUpdate(track.id, { trimEnd: newTrimEnd });
       }
@@ -147,10 +147,25 @@ export function WaveformBlock({
       setShowSnapIndicator(false);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleMouseUp);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      const touch = e.touches[0];
+      const mouseEvent = new MouseEvent('mousemove', {
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        bubbles: true
+      });
+      handleMouseMove(mouseEvent);
     };
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('touchend', handleMouseUp);
   };
 
   return (
@@ -193,19 +208,41 @@ export function WaveformBlock({
           {track.name}
         </div>
 
-        {/* Trim handles */}
+        {/* Enhanced trim handles for touch */}
         <div
-          className="absolute left-0 top-0 w-2 h-full bg-accent cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+          className="absolute left-0 top-0 w-6 h-full bg-accent cursor-ew-resize opacity-70 group-hover:opacity-100 transition-opacity flex items-center justify-center touch-manipulation"
           onMouseDown={(e) => handleMouseDown(e, 'resize-start')}
+          onTouchStart={(e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousedown', {
+              clientX: touch.clientX,
+              clientY: touch.clientY,
+              bubbles: true
+            });
+            handleMouseDown(mouseEvent as any, 'resize-start');
+          }}
+          style={{ pointerEvents: 'auto' }}
         >
-          <div className="w-0.5 h-8 bg-accent-foreground rounded-full" />
+          <div className="w-1 h-8 bg-accent-foreground rounded-full" />
         </div>
         
         <div
-          className="absolute right-0 top-0 w-2 h-full bg-accent cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+          className="absolute right-0 top-0 w-6 h-full bg-accent cursor-ew-resize opacity-70 group-hover:opacity-100 transition-opacity flex items-center justify-center touch-manipulation"
           onMouseDown={(e) => handleMouseDown(e, 'resize-end')}
+          onTouchStart={(e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousedown', {
+              clientX: touch.clientX,
+              clientY: touch.clientY,
+              bubbles: true
+            });
+            handleMouseDown(mouseEvent as any, 'resize-end');
+          }}
+          style={{ pointerEvents: 'auto' }}
         >
-          <div className="w-0.5 h-8 bg-accent-foreground rounded-full" />
+          <div className="w-1 h-8 bg-accent-foreground rounded-full" />
         </div>
       </div>
 
