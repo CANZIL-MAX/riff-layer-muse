@@ -66,6 +66,21 @@ export function RecordingStudio() {
       );
       setTracks(updatedTracks);
       
+      // If currently playing, restart playback immediately to apply mute changes
+      if (isPlaying) {
+        const wasPlayingTime = currentTime;
+        PlaybackEngine.stop();
+        
+        // Calculate new playable tracks with updated mute state
+        const newPlayableTracks = soloTracks.size > 0 
+          ? updatedTracks.filter(track => soloTracks.has(track.id) && track.audioData)
+          : updatedTracks.filter(track => !track.isMuted && track.audioData);
+        
+        if (newPlayableTracks.length > 0) {
+          await PlaybackEngine.playTracks(newPlayableTracks, wasPlayingTime);
+        }
+      }
+      
       if (currentProject) {
         const updatedProject = {
           ...currentProject,
@@ -85,6 +100,21 @@ export function RecordingStudio() {
         newSoloTracks.add(trackId);
       }
       setSoloTracks(newSoloTracks);
+      
+      // If currently playing, restart playback immediately to apply solo changes
+      if (isPlaying) {
+        const wasPlayingTime = currentTime;
+        PlaybackEngine.stop();
+        
+        // Calculate new playable tracks with updated solo state
+        const newPlayableTracks = newSoloTracks.size > 0 
+          ? tracks.filter(track => newSoloTracks.has(track.id) && track.audioData)
+          : tracks.filter(track => !track.isMuted && track.audioData);
+        
+        if (newPlayableTracks.length > 0) {
+          await PlaybackEngine.playTracks(newPlayableTracks, wasPlayingTime);
+        }
+      }
     },
 
     updateTrackName: async (trackId: string, newName: string) => {
@@ -327,20 +357,39 @@ export function RecordingStudio() {
         await MetronomeEngine.playCountIn(1);
       }
       
-      // Detect and compensate for latency (especially AirPods)
+      // Enhanced latency detection and compensation
       const audioContext = audioContextRef.current || new AudioContext();
-      const latency = audioContext.baseLatency || 0;
+      const baseLatency = audioContext.baseLatency || 0;
       const outputLatency = (audioContext as any).outputLatency || 0;
-      const totalLatency = latency + outputLatency;
       
-      // Estimate additional latency for Bluetooth devices (like AirPods)
-      const estimatedBluetoothLatency = selectedDeviceId?.includes('airpods') || 
-                                       selectedDeviceId?.includes('bluetooth') ? 0.15 : 0;
+      // Detect device-specific latency
+      let deviceLatency = 0;
+      const deviceName = selectedDeviceId?.toLowerCase() || '';
       
-      const compensatedLatency = totalLatency + estimatedBluetoothLatency;
+      if (deviceName.includes('airpods') || deviceName.includes('bluetooth')) {
+        deviceLatency = 0.15; // AirPods typical latency
+      } else if (deviceName.includes('usb') || deviceName.includes('interface')) {
+        deviceLatency = 0.005; // USB audio interface
+      } else {
+        deviceLatency = 0.02; // Built-in microphone
+      }
+      
+      // Calculate total latency with buffer analysis compensation
+      const totalSystemLatency = baseLatency + outputLatency + deviceLatency;
+      
+      // Add processing buffer compensation (iOS Safari specific)
+      const processingBufferLatency = 0.02;
+      const compensatedLatency = totalSystemLatency + processingBufferLatency;
+      
       setLatencyCompensation(compensatedLatency);
       
-      console.log('Detected latency:', { totalLatency, estimatedBluetoothLatency, compensatedLatency });
+      console.log('🎯 Advanced latency compensation:', {
+        baseLatency,
+        outputLatency, 
+        deviceLatency,
+        processingBufferLatency,
+        totalCompensation: compensatedLatency
+      });
 
       // Get user media with selected device and optimized settings for iOS
       const constraints: MediaStreamConstraints = { 

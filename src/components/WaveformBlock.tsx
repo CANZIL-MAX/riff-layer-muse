@@ -38,8 +38,12 @@ export function WaveformBlock({
   const [isResizing, setIsResizing] = useState<'start' | 'end' | false>(false);
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [showSnapIndicator, setShowSnapIndicator] = useState(false);
+  const [isLongPressing, setIsLongPressing] = useState(false);
+  const [isInTrimMode, setIsInTrimMode] = useState(false);
   const blockRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const lastTapTime = useRef<number>(0);
   
   const { snapToGrid: snapToGridFn } = useSnapToGrid({ bpm, snapEnabled: snapToGrid, zoomLevel });
 
@@ -85,6 +89,39 @@ export function WaveformBlock({
   
   const startPosition = timeToPixels(startTime);
   const blockWidth = timeToPixels(displayDuration);
+
+  // Handle touch gestures for iPhone-optimized interaction
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const now = Date.now();
+    const timeSinceLastTap = now - lastTapTime.current;
+    
+    // Double-tap detection for trim mode
+    if (timeSinceLastTap < 300) {
+      setIsInTrimMode(!isInTrimMode);
+      setShowSnapIndicator(true);
+      setTimeout(() => setShowSnapIndicator(false), 1000);
+      return;
+    }
+    
+    lastTapTime.current = now;
+    
+    // Start long-press timer for moving mode
+    longPressTimer.current = setTimeout(() => {
+      setIsLongPressing(true);
+      // Haptic feedback if available
+      if ('vibrate' in navigator) {
+        navigator.vibrate(50);
+      }
+    }, 500); // 500ms for long press
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    setIsLongPressing(false);
+  };
 
   const handleMouseDown = (e: React.MouseEvent, action: 'drag' | 'resize-start' | 'resize-end') => {
     e.preventDefault();
@@ -145,6 +182,7 @@ export function WaveformBlock({
       setIsDragging(false);
       setIsResizing(false);
       setShowSnapIndicator(false);
+      setIsLongPressing(false);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('touchmove', handleTouchMove);
@@ -171,16 +209,20 @@ export function WaveformBlock({
   return (
     <div
       ref={blockRef}
-      className={`absolute h-16 bg-primary/80 rounded border-2 border-primary/50 overflow-hidden cursor-move group transition-all duration-200 ${
+      className={`absolute h-16 bg-primary/80 rounded border-2 overflow-hidden group transition-all duration-200 ${
         isDragging ? 'shadow-glow scale-105' : ''
       } ${track.isMuted ? 'opacity-50' : ''} ${
         showSnapIndicator ? 'ring-2 ring-accent ring-opacity-50' : ''
-      }`}
+      } ${isInTrimMode ? 'border-accent border-4 shadow-accent' : 'border-primary/50'}
+      ${isLongPressing ? 'border-green-500 border-4 shadow-green-500/50' : ''}
+      ${isLongPressing || isInTrimMode ? 'cursor-grab' : 'cursor-move'}`}
       style={{
         left: `${startPosition}px`,
         width: `${Math.max(blockWidth, 20)}px`, // Minimum width for visibility
       }}
-      onMouseDown={(e) => handleMouseDown(e, 'drag')}
+      onMouseDown={(e) => !isInTrimMode ? handleMouseDown(e, 'drag') : undefined}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
     >
       {/* Waveform content */}
       <div className="h-full relative">
@@ -208,9 +250,11 @@ export function WaveformBlock({
           {track.name}
         </div>
 
-        {/* Enhanced trim handles for touch */}
+        {/* Enhanced trim handles - larger and more visible in trim mode */}
         <div
-          className="absolute left-0 top-0 w-6 h-full bg-accent cursor-ew-resize opacity-70 group-hover:opacity-100 transition-opacity flex items-center justify-center touch-manipulation"
+          className={`absolute left-0 top-0 cursor-ew-resize flex items-center justify-center touch-manipulation transition-all duration-200 ${
+            isInTrimMode ? 'w-12 h-full bg-accent opacity-100 border-r-2 border-accent-foreground' : 'w-6 h-full bg-accent opacity-70 group-hover:opacity-100'
+          }`}
           onMouseDown={(e) => handleMouseDown(e, 'resize-start')}
           onTouchStart={(e) => {
             e.preventDefault();
@@ -224,11 +268,20 @@ export function WaveformBlock({
           }}
           style={{ pointerEvents: 'auto' }}
         >
-          <div className="w-1 h-8 bg-accent-foreground rounded-full" />
+          <div className={`bg-accent-foreground rounded-full transition-all ${
+            isInTrimMode ? 'w-2 h-12' : 'w-1 h-8'
+          }`} />
+          {isInTrimMode && (
+            <div className="absolute -left-8 top-1/2 transform -translate-y-1/2 text-xs bg-accent text-accent-foreground px-1 py-0.5 rounded whitespace-nowrap">
+              TRIM
+            </div>
+          )}
         </div>
         
         <div
-          className="absolute right-0 top-0 w-6 h-full bg-accent cursor-ew-resize opacity-70 group-hover:opacity-100 transition-opacity flex items-center justify-center touch-manipulation"
+          className={`absolute right-0 top-0 cursor-ew-resize flex items-center justify-center touch-manipulation transition-all duration-200 ${
+            isInTrimMode ? 'w-12 h-full bg-accent opacity-100 border-l-2 border-accent-foreground' : 'w-6 h-full bg-accent opacity-70 group-hover:opacity-100'
+          }`}
           onMouseDown={(e) => handleMouseDown(e, 'resize-end')}
           onTouchStart={(e) => {
             e.preventDefault();
@@ -242,14 +295,33 @@ export function WaveformBlock({
           }}
           style={{ pointerEvents: 'auto' }}
         >
-          <div className="w-1 h-8 bg-accent-foreground rounded-full" />
+          <div className={`bg-accent-foreground rounded-full transition-all ${
+            isInTrimMode ? 'w-2 h-12' : 'w-1 h-8'
+          }`} />
+          {isInTrimMode && (
+            <div className="absolute -right-8 top-1/2 transform -translate-y-1/2 text-xs bg-accent text-accent-foreground px-1 py-0.5 rounded whitespace-nowrap">
+              TRIM
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Resize indicators */}
+      {/* Status indicators */}
       {isResizing && (
         <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-accent text-accent-foreground text-xs px-2 py-1 rounded whitespace-nowrap">
           {isResizing === 'start' ? `Start: ${trimStart.toFixed(1)}s` : `End: ${trimEnd.toFixed(1)}s`}
+        </div>
+      )}
+      
+      {isLongPressing && (
+        <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-green-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+          MOVE MODE - Drag to reposition
+        </div>
+      )}
+      
+      {isInTrimMode && !isResizing && (
+        <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-accent text-accent-foreground text-xs px-2 py-1 rounded whitespace-nowrap">
+          TRIM MODE - Double-tap to exit
         </div>
       )}
     </div>

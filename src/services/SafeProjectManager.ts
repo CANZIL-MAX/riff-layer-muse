@@ -224,10 +224,8 @@ class SafeProjectManagerService {
       // Handle different audio data formats
       let processedData: string;
       if (audioData.startsWith('data:')) {
-        // Remove data URL prefix if present
         processedData = audioData.replace(/^data:audio\/[^;]+;base64,/, '');
       } else {
-        // Assume it's already base64
         processedData = audioData;
       }
 
@@ -236,70 +234,68 @@ class SafeProjectManagerService {
         throw new Error('Invalid base64 audio data format');
       }
       
+      // Always prioritize native file sharing on mobile
+      if (this.isCapacitorAvailable && Capacitor?.isNativePlatform?.()) {
+        try {
+          const { Share } = await import('@capacitor/share');
+          const { Directory, Filesystem } = await import('@capacitor/filesystem');
+          
+          // Write file to Documents directory for iOS Files app access
+          const exportFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+          const filePath = `exports/${exportFileName}`;
+          
+          // Ensure exports directory exists
+          try {
+            await Filesystem.mkdir({
+              path: 'exports',
+              directory: Directory.Documents,
+              recursive: true
+            });
+          } catch (mkdirError) {
+            console.log('Exports directory already exists or creation failed');
+          }
+          
+          // Write the file to Documents
+          await Filesystem.writeFile({
+            path: filePath,
+            data: processedData,
+            directory: Directory.Documents
+          });
+          
+          // Get the file URI for sharing
+          const fileUri = await Filesystem.getUri({
+            directory: Directory.Documents,
+            path: filePath
+          });
+          
+          console.log('📁 File saved to Documents:', fileUri.uri);
+          
+          // Use native share sheet to let user choose export location
+          await Share.share({
+            title: 'Export Audio Recording',
+            text: `Share or save: ${fileName}`,
+            url: fileUri.uri,
+            dialogTitle: 'Choose where to save or share'
+          });
+          
+          console.log('✅ Native file export completed - user can access via Files app');
+          return;
+          
+        } catch (shareError) {
+          console.warn('⚠️ Native share failed:', shareError);
+          throw shareError; // Don't fallback, show the error
+        }
+      }
+      
+      // Fallback for web browsers
       try {
-        // Decode base64 to bytes with better error handling
         const binaryString = atob(processedData);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
           bytes[i] = binaryString.charCodeAt(i);
         }
         
-        // Validate audio data size
-        if (bytes.length < 100) {
-          throw new Error('Audio data appears to be corrupted or too small');
-        }
-        
-        // Create blob and download
         const blob = new Blob([bytes], { type: 'audio/wav' });
-        
-        if (this.isCapacitorAvailable && Capacitor?.isNativePlatform?.()) {
-          // Try native sharing with enhanced iOS support
-          try {
-            const { Share } = await import('@capacitor/share');
-            const { Directory, Filesystem } = await import('@capacitor/filesystem');
-            
-            // Write file to temporary directory for sharing
-            const tempFileName = `temp_${Date.now()}.wav`;
-            const base64Data = processedData;
-            
-            await Filesystem.writeFile({
-              path: tempFileName,
-              data: base64Data,
-              directory: Directory.Cache
-            });
-            
-            const fileUri = await Filesystem.getUri({
-              directory: Directory.Cache,
-              path: tempFileName
-            });
-            
-            await Share.share({
-              title: 'Share Audio Recording',
-              text: `Audio recording: ${fileName}`,
-              url: fileUri.uri,
-              dialogTitle: 'Choose export location'
-            });
-            
-            // Clean up temp file
-            setTimeout(async () => {
-              try {
-                await Filesystem.deleteFile({
-                  path: tempFileName,
-                  directory: Directory.Cache
-                });
-              } catch (cleanupError) {
-                console.warn('Failed to cleanup temp file:', cleanupError);
-              }
-            }, 5000);
-            
-            console.log('✅ Native share completed');
-            return;
-          } catch (shareError) {
-            console.warn('⚠️ Native share failed, falling back to download:', shareError);
-          }
-        }
-        
-        // Fallback to browser download
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -310,8 +306,7 @@ class SafeProjectManagerService {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        console.log('✅ Audio file download initiated successfully');
-        
+        console.log('✅ Browser download initiated');
       } catch (decodeError) {
         console.error('❌ Failed to decode audio data:', decodeError);
         throw new Error(`Failed to process audio data: ${decodeError.message}`);
@@ -319,7 +314,7 @@ class SafeProjectManagerService {
       
     } catch (error) {
       console.error('❌ Failed to share audio file:', error);
-      throw new Error(`Export failed: ${error.message}`);
+      throw new Error(`Export failed: ${error.message}. Make sure you have sufficient storage space.`);
     }
   }
 

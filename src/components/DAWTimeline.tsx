@@ -97,7 +97,7 @@ export const DAWTimeline = memo(function DAWTimeline({
     onSeek(Math.max(0, Math.min(time, totalDuration)));
   }, [pixelsToTime, scrollPosition, totalDuration, onSeek]);
 
-  // Handle scroll wheel for horizontal scrolling and zoom
+  // Enhanced gesture handling for iPhone
   const handleWheel = useCallback((event: React.WheelEvent) => {
     if (event.ctrlKey || event.metaKey) {
       // Zoom with Ctrl/Cmd + wheel
@@ -114,6 +114,39 @@ export const DAWTimeline = memo(function DAWTimeline({
       scroll(event.deltaY * 2);
     }
   }, [scroll, zoomIn, zoomOut]);
+
+  // Two-finger pan gesture handling for timeline navigation
+  const handleTouchStart = useCallback((event: React.TouchEvent) => {
+    if (event.touches.length === 2) {
+      // Two-finger gesture detected - enable pan mode
+      const touch1 = event.touches[0];
+      const touch2 = event.touches[1];
+      const centerX = (touch1.clientX + touch2.clientX) / 2;
+      
+      // Store initial position for pan calculation
+      (event.currentTarget as any)._panStartX = centerX;
+      (event.currentTarget as any)._panStartScroll = scrollPosition;
+    }
+  }, [scrollPosition]);
+
+  const handleTouchMove = useCallback((event: React.TouchEvent) => {
+    if (event.touches.length === 2) {
+      event.preventDefault(); // Prevent default zoom
+      
+      const touch1 = event.touches[0];
+      const touch2 = event.touches[1];
+      const centerX = (touch1.clientX + touch2.clientX) / 2;
+      
+      const panStartX = (event.currentTarget as any)._panStartX;
+      const panStartScroll = (event.currentTarget as any)._panStartScroll;
+      
+      if (panStartX !== undefined) {
+        const deltaX = panStartX - centerX;
+        const newScrollPosition = Math.max(0, Math.min(panStartScroll + deltaX, maxScrollPosition));
+        scroll(newScrollPosition - scrollPosition);
+      }
+    }
+  }, [scroll, scrollPosition, maxScrollPosition]);
 
   const currentTimePosition = timeToPixels(currentTime) - scrollPosition;
   const recordingStartPosition = timeToPixels(recordingStartTime) - scrollPosition;
@@ -177,19 +210,21 @@ export const DAWTimeline = memo(function DAWTimeline({
               onFitToContent={fitToContent}
             />
             <div className="text-xs text-muted-foreground hidden sm:block">
-              Pinch to zoom, Swipe to scroll
+              Two fingers: pan timeline | Double-tap: trim mode | Long-press: move mode
             </div>
           </div>
 
-          {/* Scrollable timeline container */}
+          {/* Scrollable timeline container with enhanced touch support */}
           <div 
             ref={scrollContainerRef}
             className="flex-1 overflow-auto"
             style={{ 
-              touchAction: 'manipulation',
+              touchAction: 'pan-x', // Allow horizontal panning only
               WebkitOverflowScrolling: 'touch'
             }}
             onWheel={handleWheel}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
           >
             {/* Timeline content */}
             <div 
