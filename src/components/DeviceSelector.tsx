@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Mic, RefreshCw } from 'lucide-react';
+import { Mic, RefreshCw, Smartphone } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useNativePlatform } from '@/hooks/useNativePlatform';
 
 interface DeviceSelectorProps {
   selectedDeviceId: string | null;
@@ -13,41 +14,89 @@ interface DeviceSelectorProps {
 export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelectorProps) {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [permissionState, setPermissionState] = useState<'unknown' | 'granted' | 'denied'>('unknown');
   const { toast } = useToast();
+  const { isNative, platform } = useNativePlatform();
 
-  const enumerateDevices = async () => {
+  const requestNativePermissions = async () => {
     setIsLoading(true);
     try {
-      // Check if mediaDevices is available
+      // Import Capacitor dynamically to avoid issues on web
+      const { Capacitor } = await import('@capacitor/core');
+      
+      if (Capacitor.isNativePlatform()) {
+        console.log('Requesting native microphone permissions...');
+        
+        // Check current permission status
+        const { Device } = await import('@capacitor/device');
+        
+        // Try to access microphone to trigger permission dialog
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach(track => track.stop()); // Clean up
+          setPermissionState('granted');
+          
+          // Set a default device for native (we can't enumerate on iOS)
+          onDeviceChange('default-native-microphone');
+          
+          toast({
+            title: "Microphone Access Granted",
+            description: "You can now record audio in your projects.",
+          });
+        } catch (error) {
+          console.error('Microphone permission denied:', error);
+          setPermissionState('denied');
+          
+          toast({
+            title: "Microphone Permission Required",
+            description: "Please enable microphone access in Settings > Privacy & Security > Microphone > riff-layer-muse",
+            variant: "destructive",
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error requesting native permissions:', error);
+      setPermissionState('denied');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const enumerateDevices = async () => {
+    // On native platforms, handle permissions differently
+    if (isNative) {
+      await requestNativePermissions();
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Web platform device enumeration
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        console.log('MediaDevices API not available');
         throw new Error('MediaDevices API not supported');
       }
 
       console.log('Requesting microphone permissions...');
-      // Request permissions first
       await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      // Check if enumerateDevices is available
       if (!navigator.mediaDevices.enumerateDevices) {
-        console.log('enumerateDevices not available');
         throw new Error('Device enumeration not supported');
       }
 
       console.log('Enumerating devices...');
-      // Get all audio input devices
       const allDevices = await navigator.mediaDevices.enumerateDevices();
       const audioInputs = allDevices.filter(device => device.kind === 'audioinput');
       
       console.log(`Found ${audioInputs.length} audio input devices`);
       setDevices(audioInputs);
+      setPermissionState('granted');
       
-      // If no device is selected and we have devices, select the first one
       if (!selectedDeviceId && audioInputs.length > 0) {
         onDeviceChange(audioInputs[0].deviceId);
       }
     } catch (error) {
       console.error('Error enumerating devices:', error);
+      setPermissionState('denied');
       toast({
         title: "Microphone Access",
         description: "Please allow microphone access to select audio input devices.",
@@ -95,6 +144,68 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
 
   const selectedDevice = devices.find(device => device.deviceId === selectedDeviceId);
 
+  // Render native iOS interface
+  if (isNative) {
+    return (
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Smartphone className="w-4 h-4" />
+            Device Microphone
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Button
+              variant={permissionState === 'granted' ? 'default' : 'outline'}
+              size="sm"
+              onClick={enumerateDevices}
+              disabled={isLoading}
+              className="flex-1"
+            >
+              {isLoading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                  Checking permissions...
+                </>
+              ) : permissionState === 'granted' ? (
+                <>
+                  <Mic className="w-4 h-4 mr-2" />
+                  Microphone Ready
+                </>
+              ) : (
+                <>
+                  <Mic className="w-4 h-4 mr-2" />
+                  Allow Microphone Access
+                </>
+              )}
+            </Button>
+          </div>
+          
+          {permissionState === 'granted' && (
+            <p className="text-xs text-muted-foreground">
+              Using: Built-in microphone
+            </p>
+          )}
+          
+          {permissionState === 'denied' && (
+            <div className="space-y-2">
+              <p className="text-xs text-destructive">
+                Microphone access denied. To enable recording:
+              </p>
+              <ol className="text-xs text-muted-foreground space-y-1 ml-4 list-decimal">
+                <li>Go to Settings → Privacy & Security → Microphone</li>
+                <li>Find "riff-layer-muse" and toggle it on</li>
+                <li>Return to the app and tap "Allow Microphone Access"</li>
+              </ol>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Render web interface
   return (
     <Card className="bg-card border-border">
       <CardHeader className="pb-3">
@@ -145,9 +256,15 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
           </p>
         )}
         
-        {devices.length === 0 && !isLoading && (
+        {devices.length === 0 && !isLoading && permissionState !== 'denied' && (
           <p className="text-xs text-destructive">
             No microphones detected. Please connect a microphone and refresh.
+          </p>
+        )}
+        
+        {permissionState === 'denied' && (
+          <p className="text-xs text-destructive">
+            Microphone access denied. Please allow microphone access and refresh.
           </p>
         )}
       </CardContent>
