@@ -4,6 +4,7 @@ import { TrackControls } from '@/components/TrackControls';
 import { WaveformBlock } from '@/components/WaveformBlock';
 import { MeasureRuler } from '@/components/MeasureRuler';
 import { ZoomControls } from '@/components/ZoomControls';
+import { TimelinePanZoom } from '@/components/TimelinePanZoom';
 import { useTimeline } from '@/hooks/useTimeline';
 import { useTimelineZoom } from '@/hooks/useTimelineZoom';
 import { Card } from '@/components/ui/card';
@@ -191,6 +192,7 @@ export const DAWTimeline = memo(function DAWTimeline({
                     onUpdateTrackName={onUpdateTrackName}
                     isSoloed={soloTracks.has(track.id)}
                     hasSoloedTracks={soloTracks.size > 0}
+                    isPlaying={isPlaying}
                   />
                 ))}
               </div>

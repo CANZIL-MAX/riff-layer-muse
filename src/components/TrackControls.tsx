@@ -25,6 +25,7 @@ interface TrackControlsProps {
   onUpdateTrackName: (trackId: string, name: string) => void;
   isSoloed?: boolean;
   hasSoloedTracks?: boolean;
+  isPlaying?: boolean; // Add isPlaying prop for live feedback
 }
 
 export function TrackControls({
@@ -38,6 +39,7 @@ export function TrackControls({
   onUpdateTrackName,
   isSoloed = false,
   hasSoloedTracks = false,
+  isPlaying = false,
 }: TrackControlsProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState(track.name);
@@ -97,30 +99,30 @@ export function TrackControls({
 
       {/* Controls row */}
       <div className="flex items-center gap-1 px-2 py-1">
-        {/* Mute button */}
+        {/* Mute button with live feedback */}
         <Button
           variant="ghost"
           size="sm"
           onClick={() => onToggleMute(track.id)}
-          className={`h-6 w-8 text-xs font-bold ${
+          className={`h-6 w-8 text-xs font-bold transition-all duration-200 ${
             track.isMuted || (hasSoloedTracks && !isSoloed)
               ? "bg-destructive text-destructive-foreground" 
               : "hover:bg-muted text-muted-foreground"
-          }`}
+          } ${isPlaying && track.isMuted ? 'animate-pulse' : ''}`}
         >
           M
         </Button>
 
-        {/* Solo button */}
+        {/* Solo button with live feedback */}
         <Button
           variant="ghost"
           size="sm"
           onClick={() => onToggleSolo(track.id)}
-          className={`h-6 w-8 text-xs font-bold ${
+          className={`h-6 w-8 text-xs font-bold transition-all duration-200 ${
             isSoloed
               ? "bg-accent text-accent-foreground" 
               : "hover:bg-muted text-muted-foreground"
-          }`}
+          } ${isPlaying && isSoloed ? 'animate-pulse' : ''}`}
         >
           S
         </Button>

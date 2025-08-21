@@ -8,6 +8,8 @@ import { AudioLayer } from '@/components/AudioLayer';
 import { DAWTimeline } from '@/components/DAWTimeline';
 import { DeviceSelector } from '@/components/DeviceSelector';
 import { MetronomeControls } from '@/components/MetronomeControls';
+import { NativeExportDialog } from '@/components/NativeExportDialog';
+import { useNativePlatform } from '@/hooks/useNativePlatform';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,12 +50,14 @@ export function RecordingStudio() {
   const [showAudioLayers, setShowAudioLayers] = useState(true);
   const [latencyCompensation, setLatencyCompensation] = useState(0);
   const [soloTracks, setSoloTracks] = useState<Set<string>>(new Set());
+  const [showExportDialog, setShowExportDialog] = useState(false);
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const { toast } = useToast();
+  const { isNative } = useNativePlatform();
 
   // State to store scrollToTime function from DAWTimeline
   const [scrollToTimeFunction, setScrollToTimeFunction] = useState<((time: number) => void) | null>(null);
@@ -751,7 +755,81 @@ export function RecordingStudio() {
     setCurrentTime(time);
   };
 
+  const handleNativeExport = async (options: { filename: string; format: string; quality: string }) => {
+    if (!isNative) {
+      await exportProject();
+      return;
+    }
+
+    try {
+      console.log('🚀 Starting native project export with options:', options);
+      
+      if (!currentProject || currentProject.tracks.length === 0) {
+        throw new Error("No tracks to export");
+      }
+
+      const validTracks = currentProject.tracks.filter(track => track.audioData && track.audioData.length > 0);
+      if (validTracks.length === 0) {
+        throw new Error("No tracks contain audio data");
+      }
+
+      console.log(`📊 Exporting ${validTracks.length} tracks to native Files app`);
+
+      const mixedBuffer = await AudioMixer.mixTracks(validTracks);
+      if (!mixedBuffer || mixedBuffer.length === 0) {
+        throw new Error('Mixed audio buffer is empty');
+      }
+      
+      const wavData = AudioMixer.audioBufferToWav(mixedBuffer);
+      const base64Audio = AudioMixer.arrayBufferToBase64(wavData);
+      
+      const fileName = `${options.filename.replace(/\s+/g, '_')}.${options.format}`;
+      
+      // Use the Capacitor Share API for native file export
+      const { Capacitor } = await import('@capacitor/core');
+      const { Filesystem, Directory } = await import('@capacitor/filesystem');
+      const { Share } = await import('@capacitor/share');
+      
+      if (Capacitor.isNativePlatform()) {
+        // Save file to app documents directory
+        const result = await Filesystem.writeFile({
+          path: `exports/${fileName}`,
+          data: base64Audio,
+          directory: Directory.Documents
+        });
+        
+        // Get the file URI
+        const fileUri = await Filesystem.getUri({
+          path: `exports/${fileName}`,
+          directory: Directory.Documents
+        });
+        
+        console.log('📁 File saved to Documents:', fileUri.uri);
+        
+        // Share the file using iOS Files app
+        await Share.share({
+          url: fileUri.uri,
+          title: fileName,
+          dialogTitle: 'Save to Files'
+        });
+        
+        console.log('✅ Native file export completed - user can access via Files app');
+      } else {
+        // Fallback to web export
+        await exportProject();
+      }
+    } catch (error) {
+      console.error('❌ Native export failed:', error);
+      throw error;
+    }
+  };
+
   const exportProject = async () => {
+    if (isNative) {
+      setShowExportDialog(true);
+      return;
+    }
+
     try {
       console.log('🚀 Starting project export...');
       
@@ -1245,6 +1323,16 @@ export function RecordingStudio() {
             )}
           </div>
         </Card>
+
+        {/* Native Export Dialog */}
+        {isNative && (
+          <NativeExportDialog
+            isOpen={showExportDialog}
+            onClose={() => setShowExportDialog(false)}
+            onExport={handleNativeExport}
+            projectName={projectName}
+          />
+        )}
       </div>
       <Toaster />
     </div>

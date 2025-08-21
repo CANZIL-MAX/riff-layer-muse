@@ -8,6 +8,12 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    // Security hardening for development server
+    cors: {
+      origin: mode === 'development' ? true : false,
+      credentials: true
+    },
+    strictPort: true,
   },
   plugins: [
     react(),
