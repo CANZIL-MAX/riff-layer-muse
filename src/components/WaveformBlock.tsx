@@ -92,6 +92,7 @@ export function WaveformBlock({
 
   // Handle touch gestures for iPhone-optimized interaction
   const handleTouchStart = (e: React.TouchEvent) => {
+    e.preventDefault(); // Prevent iOS selection UI
     const now = Date.now();
     const timeSinceLastTap = now - lastTapTime.current;
     
@@ -112,6 +113,20 @@ export function WaveformBlock({
       if ('vibrate' in navigator) {
         navigator.vibrate(50);
       }
+      // Trigger synthetic drag after long press
+      if (blockRef.current) {
+        const touch = e.touches[0];
+        const rect = blockRef.current.getBoundingClientRect();
+        const syntheticEvent = {
+          preventDefault: () => {},
+          stopPropagation: () => {},
+          clientX: touch.clientX,
+          clientY: touch.clientY,
+          currentTarget: blockRef.current,
+          target: blockRef.current
+        } as any;
+        handleMouseDown(syntheticEvent, 'drag');
+      }
     }, 500); // 500ms for long press
   };
 
@@ -126,6 +141,9 @@ export function WaveformBlock({
   const handleMouseDown = (e: React.MouseEvent, action: 'drag' | 'resize-start' | 'resize-end') => {
     e.preventDefault();
     e.stopPropagation();
+
+    // Guard against null currentTarget
+    if (!e.currentTarget) return;
 
     // Get the timeline container to calculate proper coordinates
     const timelineElement = e.currentTarget.closest('[data-timeline]') || 
@@ -209,7 +227,7 @@ export function WaveformBlock({
   return (
     <div
       ref={blockRef}
-      className={`absolute h-16 bg-primary/80 rounded border-2 overflow-hidden group transition-all duration-200 ${
+      className={`absolute h-16 bg-primary/80 rounded border-2 overflow-hidden group transition-all duration-200 select-none ${
         isDragging ? 'shadow-glow scale-105' : ''
       } ${track.isMuted ? 'opacity-50' : ''} ${
         showSnapIndicator ? 'ring-2 ring-accent ring-opacity-50' : ''
@@ -219,6 +237,10 @@ export function WaveformBlock({
       style={{
         left: `${startPosition}px`,
         width: `${Math.max(blockWidth, 20)}px`, // Minimum width for visibility
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
+        WebkitTapHighlightColor: 'transparent',
+        touchAction: 'none'
       }}
       onMouseDown={(e) => !isInTrimMode ? handleMouseDown(e, 'drag') : undefined}
       onTouchStart={handleTouchStart}
@@ -252,21 +274,30 @@ export function WaveformBlock({
 
         {/* Enhanced trim handles - larger and more visible in trim mode */}
         <div
-          className={`absolute left-0 top-0 cursor-ew-resize flex items-center justify-center touch-manipulation transition-all duration-200 ${
+          className={`absolute left-0 top-0 cursor-ew-resize flex items-center justify-center touch-manipulation transition-all duration-200 select-none ${
             isInTrimMode ? 'w-12 h-full bg-accent opacity-100 border-r-2 border-accent-foreground' : 'w-6 h-full bg-accent opacity-70 group-hover:opacity-100'
           }`}
           onMouseDown={(e) => handleMouseDown(e, 'resize-start')}
           onTouchStart={(e) => {
             e.preventDefault();
             const touch = e.touches[0];
-            const mouseEvent = new MouseEvent('mousedown', {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const mouseEvent = {
+              preventDefault: () => {},
+              stopPropagation: () => {},
               clientX: touch.clientX,
               clientY: touch.clientY,
-              bubbles: true
-            });
-            handleMouseDown(mouseEvent as any, 'resize-start');
+              currentTarget: e.currentTarget,
+              target: e.currentTarget
+            } as any;
+            handleMouseDown(mouseEvent, 'resize-start');
           }}
-          style={{ pointerEvents: 'auto' }}
+          style={{ 
+            pointerEvents: 'auto',
+            WebkitUserSelect: 'none',
+            WebkitTouchCallout: 'none',
+            touchAction: 'none'
+          }}
         >
           <div className={`bg-accent-foreground rounded-full transition-all ${
             isInTrimMode ? 'w-2 h-12' : 'w-1 h-8'
@@ -279,21 +310,30 @@ export function WaveformBlock({
         </div>
         
         <div
-          className={`absolute right-0 top-0 cursor-ew-resize flex items-center justify-center touch-manipulation transition-all duration-200 ${
+          className={`absolute right-0 top-0 cursor-ew-resize flex items-center justify-center touch-manipulation transition-all duration-200 select-none ${
             isInTrimMode ? 'w-12 h-full bg-accent opacity-100 border-l-2 border-accent-foreground' : 'w-6 h-full bg-accent opacity-70 group-hover:opacity-100'
           }`}
           onMouseDown={(e) => handleMouseDown(e, 'resize-end')}
           onTouchStart={(e) => {
             e.preventDefault();
             const touch = e.touches[0];
-            const mouseEvent = new MouseEvent('mousedown', {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const mouseEvent = {
+              preventDefault: () => {},
+              stopPropagation: () => {},
               clientX: touch.clientX,
               clientY: touch.clientY,
-              bubbles: true
-            });
-            handleMouseDown(mouseEvent as any, 'resize-end');
+              currentTarget: e.currentTarget,
+              target: e.currentTarget
+            } as any;
+            handleMouseDown(mouseEvent, 'resize-end');
           }}
-          style={{ pointerEvents: 'auto' }}
+          style={{ 
+            pointerEvents: 'auto',
+            WebkitUserSelect: 'none',
+            WebkitTouchCallout: 'none',
+            touchAction: 'none'
+          }}
         >
           <div className={`bg-accent-foreground rounded-full transition-all ${
             isInTrimMode ? 'w-2 h-12' : 'w-1 h-8'
