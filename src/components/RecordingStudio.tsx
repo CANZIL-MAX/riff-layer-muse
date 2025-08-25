@@ -209,20 +209,31 @@ export function RecordingStudio() {
           // Continue anyway
         }
         
-        // Create default project
-        console.log('📝 Creating default project...');
-        const defaultProject = ProjectManager.createNewProject('My First Project');
-        console.log('✅ Default project created:', defaultProject.name);
+        // Check for existing projects first, then create default if none exist
+        console.log('📂 Checking for existing projects...');
+        const existingProjects = await ProjectManager.getAllProjects();
         
-        setCurrentProject(defaultProject);
-        setProjectName(defaultProject.name);
+        let projectToLoad: Project;
+        if (existingProjects.length > 0) {
+          // Auto-load the most recent project
+          projectToLoad = existingProjects[0]; // Already sorted by lastModified
+          console.log('✅ Loading most recent project:', projectToLoad.name);
+        } else {
+          // Create and save default project
+          projectToLoad = ProjectManager.createNewProject('My First Project');
+          await ProjectManager.saveProject(projectToLoad);
+          console.log('✅ Created and saved new default project:', projectToLoad.name);
+        }
+        
+        setCurrentProject(projectToLoad);
+        setProjectName(projectToLoad.name);
         
         // Load project settings safely
-        if (defaultProject.settings) {
-          setBpm(defaultProject.settings.tempo || 120);
-          setIsMetronomeEnabled(defaultProject.settings.metronomeEnabled || false);
-          setMetronomeVolume(defaultProject.settings.metronomeVolume || 0.5);
-          setSnapToGrid(defaultProject.settings.snapToGrid !== false);
+        if (projectToLoad.settings) {
+          setBpm(projectToLoad.settings.tempo || 120);
+          setIsMetronomeEnabled(projectToLoad.settings.metronomeEnabled || false);
+          setMetronomeVolume(projectToLoad.settings.metronomeVolume || 0.5);
+          setSnapToGrid(projectToLoad.settings.snapToGrid !== false);
         }
         
         clearTimeout(initTimeout);

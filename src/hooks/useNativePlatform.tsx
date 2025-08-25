@@ -41,22 +41,34 @@ export const useNativePlatform = () => {
       let storageMode: 'native' | 'memory' | 'unknown' = 'memory';
 
       try {
-        isCapacitorAvailable = typeof window !== 'undefined' && !!window.Capacitor && !!Capacitor;
+        // Enhanced native platform detection
+        const hasCapacitor = typeof window !== 'undefined' && !!window.Capacitor;
+        const hasCapacitorImport = !!Capacitor;
         
-        if (isCapacitorAvailable && Capacitor) {
+        isCapacitorAvailable = hasCapacitor && hasCapacitorImport;
+        
+        if (isCapacitorAvailable && Capacitor && Capacitor.isNativePlatform) {
           isNative = Capacitor.isNativePlatform();
           platform = Capacitor.getPlatform();
           
+          // Only set native storage if we're actually on a native platform
           if (isNative) {
             storageMode = 'native';
+            console.log('🎯 Native platform confirmed:', platform);
+          } else {
+            console.log('🌐 Web platform with Capacitor available');
           }
+        } else {
+          console.log('🌐 Pure web platform, no Capacitor');
         }
         
         console.log('✅ Platform detection successful:', {
           isNative,
           platform,
           isCapacitorAvailable,
-          storageMode
+          storageMode,
+          hasCapacitor,
+          hasCapacitorImport
         });
         
       } catch (error) {
@@ -74,7 +86,7 @@ export const useNativePlatform = () => {
         storageMode
       });
 
-      // Log platform info for debugging
+      // Enhanced platform logging for native debugging
       console.log('🔍 Final Platform Info:', {
         isNative,
         platform,
@@ -82,7 +94,8 @@ export const useNativePlatform = () => {
         storageMode,
         userAgent: navigator.userAgent,
         capacitorObject: !!window.Capacitor,
-        capacitorImport: !!Capacitor
+        capacitorImport: !!Capacitor,
+        nativeCheck: Capacitor?.isNativePlatform?.() || false
       });
     };
 

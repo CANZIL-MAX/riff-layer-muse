@@ -37,9 +37,9 @@ class SafeProjectManagerService {
 
       if (this.isCapacitorAvailable && FilesystemAPI && DirectoryAPI) {
         try {
-          console.log('📁 Setting up native filesystem...');
+          console.log('📁 Setting up native filesystem for persistent storage...');
           
-          // Try to create directories
+          // Try to create directories with detailed error handling
           await FilesystemAPI.mkdir({
             path: 'riff-layer-muse',
             directory: DirectoryAPI.Documents,
@@ -52,24 +52,45 @@ class SafeProjectManagerService {
             recursive: true
           });
           
-          console.log('✅ Capacitor filesystem initialized successfully');
+          // Test write/read to ensure filesystem is working
+          const testPath = 'riff-layer-muse/projects/test.json';
+          await FilesystemAPI.writeFile({
+            path: testPath,
+            data: '{"test": true}',
+            directory: DirectoryAPI.Documents,
+            encoding: 'utf8' as any
+          });
+          
+          await FilesystemAPI.deleteFile({
+            path: testPath,
+            directory: DirectoryAPI.Documents
+          });
+          
+          console.log('✅ Native filesystem initialized and tested successfully');
         } catch (error: any) {
-          console.warn('⚠️ Filesystem initialization failed, using memory:', error.message);
+          console.warn('⚠️ Native filesystem failed, projects will not persist:', error.message);
           this.isCapacitorAvailable = false;
+          
+          // Show toast warning about non-persistent storage
+          if (typeof window !== 'undefined') {
+            setTimeout(() => {
+              console.warn('📢 Storage warning: Projects will be lost on app restart');
+            }, 1000);
+          }
         }
       } else {
-        console.log('💾 Using memory storage mode');
+        console.log('💾 No native filesystem available - memory-only mode');
         this.isCapacitorAvailable = false;
       }
 
       this.isInitialized = true;
-      console.log('✅ SafeProjectManager initialized with storage mode:', this.isCapacitorAvailable ? 'native' : 'memory');
+      console.log('✅ SafeProjectManager initialized with storage mode:', this.isCapacitorAvailable ? 'native-persistent' : 'memory-only');
       
     } catch (error) {
       console.error('❌ SafeProjectManager initialization error:', error);
       this.isCapacitorAvailable = false;
       this.isInitialized = true;
-      console.log('🔄 Continuing with memory-only storage');
+      console.log('🔄 Fallback to memory-only storage');
     }
   }
 

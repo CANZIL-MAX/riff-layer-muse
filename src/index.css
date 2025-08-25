@@ -127,5 +127,23 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    /* Native iOS gesture optimization */
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  
+  /* Disable text selection globally for native app feel */
+  * {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  
+  /* Re-enable selection for text inputs */
+  input, textarea, [contenteditable] {
+    -webkit-user-select: text;
+    user-select: text;
   }
 }
