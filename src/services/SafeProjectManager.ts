@@ -263,17 +263,19 @@ class SafeProjectManagerService {
           
           // Write file to Documents directory for iOS Files app access
           const exportFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-          const filePath = `exports/${exportFileName}`;
+          const filePath = `riff-layer-muse/exports/${exportFileName}`;
           
-          // Ensure exports directory exists
+          // Ensure exports directory exists with better error handling
           try {
             await Filesystem.mkdir({
-              path: 'exports',
+              path: 'riff-layer-muse/exports',
               directory: Directory.Documents,
               recursive: true
             });
-          } catch (mkdirError) {
-            console.log('Exports directory already exists or creation failed');
+            console.log('✅ Exports directory created/verified');
+          } catch (mkdirError: any) {
+            console.warn('⚠️ Directory creation warning:', mkdirError?.message || mkdirError);
+            // Continue anyway - directory might already exist
           }
           
           // Write the file to Documents
