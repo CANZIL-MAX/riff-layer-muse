@@ -1,16 +1,5 @@
 import { useState, useEffect } from 'react';
-
-// Safe Capacitor import with fallback
-let Capacitor: any = null;
-try {
-  Capacitor = require('@capacitor/core').Capacitor;
-} catch (error) {
-  console.warn('Capacitor not available, using web fallback:', error);
-  Capacitor = {
-    isNativePlatform: () => false,
-    getPlatform: () => 'web'
-  };
-}
+import { Capacitor } from '@capacitor/core';
 
 declare global {
   interface Window {
@@ -41,23 +30,21 @@ export const useNativePlatform = () => {
       let storageMode: 'native' | 'memory' | 'unknown' = 'memory';
 
       try {
-        // Enhanced native platform detection
-        const hasCapacitor = typeof window !== 'undefined' && !!window.Capacitor;
+        // Multiple methods for native detection
+        const hasWindowCapacitor = typeof window !== 'undefined' && !!window.Capacitor;
+        const isCapacitorURL = typeof window !== 'undefined' && window.location?.href?.startsWith('capacitor://');
         const hasCapacitorImport = !!Capacitor;
         
-        isCapacitorAvailable = hasCapacitor && hasCapacitorImport;
+        // Prioritize definitive native indicators
+        isNative = isCapacitorURL || (hasWindowCapacitor && Capacitor?.isNativePlatform?.());
+        isCapacitorAvailable = hasWindowCapacitor || hasCapacitorImport;
         
-        if (isCapacitorAvailable && Capacitor && Capacitor.isNativePlatform) {
-          isNative = Capacitor.isNativePlatform();
-          platform = Capacitor.getPlatform();
-          
-          // Only set native storage if we're actually on a native platform
-          if (isNative) {
-            storageMode = 'native';
-            console.log('🎯 Native platform confirmed:', platform);
-          } else {
-            console.log('🌐 Web platform with Capacitor available');
-          }
+        if (isNative) {
+          platform = Capacitor?.getPlatform?.() || 'native';
+          storageMode = 'native';
+          console.log('🎯 Native platform confirmed:', platform);
+        } else if (isCapacitorAvailable) {
+          console.log('🌐 Web platform with Capacitor available');
         } else {
           console.log('🌐 Pure web platform, no Capacitor');
         }
@@ -67,7 +54,8 @@ export const useNativePlatform = () => {
           platform,
           isCapacitorAvailable,
           storageMode,
-          hasCapacitor,
+          isCapacitorURL,
+          hasWindowCapacitor,
           hasCapacitorImport
         });
         

@@ -2,10 +2,10 @@ import { useNativePlatform } from "@/hooks/useNativePlatform";
 import { Card } from "@/components/ui/card";
 
 export const NativeOnlyGate = ({ children }: { children: React.ReactNode }) => {
-  const { isNative, isCapacitorAvailable } = useNativePlatform();
+  const { isNative } = useNativePlatform();
 
   // Show gate if not running on native platform
-  if (!isNative || !isCapacitorAvailable) {
+  if (!isNative) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="max-w-md mx-auto p-8 text-center">
