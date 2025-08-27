@@ -263,32 +263,85 @@ class SafeProjectManagerService {
           
           // Write file to Documents directory for iOS Files app access
           const exportFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-          const filePath = `riff-layer-muse/exports/${exportFileName}`;
           
-          // Ensure exports directory exists with better error handling
+          // Try multiple directory creation approaches with fallbacks
+          let writePath = '';
+          let writeDirectory = Directory.Documents;
+          
           try {
-            await Filesystem.mkdir({
-              path: 'riff-layer-muse/exports',
-              directory: Directory.Documents,
-              recursive: true
+            // First, try creating the app-specific directory structure
+            const appPath = 'riff-layer-muse';
+            const exportsPath = 'riff-layer-muse/exports';
+            
+            console.log('🔧 Creating directory structure...');
+            
+            // Create app directory first
+            try {
+              await Filesystem.mkdir({
+                path: appPath,
+                directory: Directory.Documents,
+                recursive: true
+              });
+              console.log('✅ App directory created/verified');
+            } catch (error) {
+              console.log('📁 App directory already exists');
+            }
+            
+            // Create exports subdirectory
+            try {
+              await Filesystem.mkdir({
+                path: exportsPath,
+                directory: Directory.Documents,
+                recursive: true
+              });
+              console.log('✅ Exports directory created/verified');
+            } catch (error) {
+              console.log('📁 Exports directory already exists');
+            }
+            
+            // Verify directory exists by listing contents
+            const dirContents = await Filesystem.readdir({
+              path: appPath,
+              directory: Directory.Documents
             });
-            console.log('✅ Exports directory created/verified');
-          } catch (mkdirError: any) {
-            console.warn('⚠️ Directory creation warning:', mkdirError?.message || mkdirError);
-            // Continue anyway - directory might already exist
+            console.log('📂 Directory contents:', dirContents);
+            
+            writePath = `${exportsPath}/${exportFileName}`;
+            writeDirectory = Directory.Documents;
+            
+          } catch (dirError: any) {
+            console.warn('⚠️ Documents directory setup failed, using Cache fallback:', dirError?.message);
+            // Fallback to Cache directory
+            try {
+              await Filesystem.mkdir({
+                path: 'exports',
+                directory: Directory.Cache,
+                recursive: true
+              });
+              writePath = `exports/${exportFileName}`;
+              writeDirectory = Directory.Cache;
+              console.log('✅ Using Cache directory fallback');
+            } catch (cacheError: any) {
+              console.warn('⚠️ Cache directory setup also failed:', cacheError?.message);
+              // Last resort - write directly to root
+              writePath = exportFileName;
+              writeDirectory = Directory.Documents;
+            }
           }
           
-          // Write the file to Documents
+          console.log(`💾 Writing file to: ${writePath} in ${writeDirectory}`);
+          
+          // Write the file
           await Filesystem.writeFile({
-            path: filePath,
+            path: writePath,
             data: processedData,
-            directory: Directory.Documents
+            directory: writeDirectory
           });
           
           // Get the file URI for sharing
           const fileUri = await Filesystem.getUri({
-            directory: Directory.Documents,
-            path: filePath
+            directory: writeDirectory,
+            path: writePath
           });
           
           console.log('📁 File saved to Documents:', fileUri.uri);
