@@ -802,17 +802,39 @@ export function RecordingStudio() {
       const { Share } = await import('@capacitor/share');
       
       if (Capacitor.isNativePlatform()) {
-        // Save file to app documents directory
-        const result = await Filesystem.writeFile({
-          path: `exports/${fileName}`,
+        // Ensure export directory exists, then save file to Documents
+        const appDir = 'riff-layer-muse';
+        const exportsDir = `${appDir}/exports`;
+
+        try {
+          await Filesystem.mkdir({
+            path: appDir,
+            directory: Directory.Documents,
+            recursive: true,
+          });
+        } catch {}
+
+        try {
+          await Filesystem.mkdir({
+            path: exportsDir,
+            directory: Directory.Documents,
+            recursive: true,
+          });
+        } catch {}
+
+        const relativePath = `${exportsDir}/${fileName}`;
+
+        await Filesystem.writeFile({
+          path: relativePath,
           data: base64Audio,
-          directory: Directory.Documents
+          directory: Directory.Documents,
+          recursive: true,
         });
         
         // Get the file URI
         const fileUri = await Filesystem.getUri({
-          path: `exports/${fileName}`,
-          directory: Directory.Documents
+          path: relativePath,
+          directory: Directory.Documents,
         });
         
         console.log('📁 File saved to Documents:', fileUri.uri);
