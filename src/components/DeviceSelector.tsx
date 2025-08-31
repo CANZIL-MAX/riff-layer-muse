@@ -32,16 +32,48 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
         
         // Try to access microphone to trigger permission dialog
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          // First, try with basic audio constraints
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              // This helps iOS detect Bluetooth devices like AirPods
+              sampleRate: { ideal: 44100 },
+              channelCount: { ideal: 2 }
+            } 
+          });
+          
+          // Check available audio devices on iOS (limited but can detect some info)
+          const audioTrack = stream.getAudioTracks()[0];
+          const settings = audioTrack.getSettings();
+          const capabilities = audioTrack.getCapabilities();
+          
+          console.log('🎧 Audio device settings:', settings);
+          console.log('🎧 Audio device capabilities:', capabilities);
+          
+          // Detect if we're using a Bluetooth device (AirPods, etc.)
+          const isBluetoothDevice = settings.deviceId && (
+            settings.deviceId.includes('bluetooth') ||
+            (settings.groupId && settings.groupId.includes('bluetooth')) ||
+            (capabilities && capabilities.deviceId && Array.isArray(capabilities.deviceId) && 
+             capabilities.deviceId.some(id => id.includes('bluetooth')))
+          );
+          
+          console.log('🎧 Detected Bluetooth device:', isBluetoothDevice);
+          
           stream.getTracks().forEach(track => track.stop()); // Clean up
           setPermissionState('granted');
           
-          // Set a default device for native (we can't enumerate on iOS)
-          onDeviceChange('default-native-microphone');
+          // Set appropriate device ID based on detection
+          const deviceType = isBluetoothDevice ? 'bluetooth-microphone' : 'default-native-microphone';
+          onDeviceChange(deviceType);
           
           toast({
             title: "Microphone Access Granted",
-            description: "You can now record audio in your projects.",
+            description: isBluetoothDevice 
+              ? "Bluetooth microphone (AirPods) detected and ready!" 
+              : "Built-in microphone ready for recording.",
           });
         } catch (error) {
           console.error('Microphone permission denied:', error);
@@ -184,7 +216,7 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
           
           {permissionState === 'granted' && (
             <p className="text-xs text-muted-foreground">
-              Using: Built-in microphone
+              Using: {selectedDeviceId === 'bluetooth-microphone' ? '🎧 Bluetooth microphone (AirPods)' : '📱 Built-in microphone'}
             </p>
           )}
           
