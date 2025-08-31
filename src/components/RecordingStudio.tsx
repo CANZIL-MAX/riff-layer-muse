@@ -407,11 +407,12 @@ export function RecordingStudio() {
       });
 
       // Get user media with selected device and optimized settings for iOS
+      // Use specific settings to prevent audio ducking during recording
       const constraints: MediaStreamConstraints = { 
         audio: {
-          echoCancellation: false, // Disable for better latency
-          noiseSuppression: false, // Disable for better latency  
-          autoGainControl: false, // Disable for better latency
+          echoCancellation: false, // Disable to prevent ducking
+          noiseSuppression: false, // Disable to prevent ducking
+          autoGainControl: false, // Critical: disable AGC to prevent volume ducking
           sampleRate: 44100,
           channelCount: 1, // Mono for better performance
           ...(selectedDeviceId && { deviceId: { exact: selectedDeviceId } })

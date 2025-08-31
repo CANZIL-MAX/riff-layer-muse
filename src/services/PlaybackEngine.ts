@@ -129,7 +129,9 @@ export class PlaybackEngineService {
       source.buffer = audioBuffer;
 
       const trackGain = this.audioContext.createGain();
-      trackGain.gain.value = track.volume || 1;
+      // Lock the track volume to prevent ducking during recording
+      const volume = track.volume || 1;
+      trackGain.gain.setValueAtTime(volume, this.audioContext.currentTime);
 
       source.connect(trackGain);
       trackGain.connect(this.masterGainNode!);
@@ -258,7 +260,11 @@ export class PlaybackEngineService {
 
   setMasterVolume(volume: number): void {
     if (this.masterGainNode) {
-      this.masterGainNode.gain.value = Math.max(0, Math.min(1, volume));
+      // Ensure volume remains constant during recording - no automatic ducking
+      this.masterGainNode.gain.setValueAtTime(
+        Math.max(0, Math.min(1, volume)), 
+        this.audioContext?.currentTime || 0
+      );
     }
   }
 }
