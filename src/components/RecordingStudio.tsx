@@ -22,6 +22,64 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Project, AudioTrack } from '@/services/ProjectManager';
 import { SimpleFallback } from '@/components/SimpleFallback';
 
+// Audio normalization function to peak at -0.1dB with minimum at -12dB
+const normalizeAudioBuffer = (audioBuffer: AudioBuffer, audioContext: AudioContext): AudioBuffer => {
+  console.log('🔊 Starting audio normalization...');
+  
+  // Create a new audio buffer with the same parameters
+  const normalizedBuffer = audioContext.createBuffer(
+    audioBuffer.numberOfChannels,
+    audioBuffer.length,
+    audioBuffer.sampleRate
+  );
+  
+  // Find the peak amplitude across all channels
+  let peak = 0;
+  for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+    const channelData = audioBuffer.getChannelData(channel);
+    for (let i = 0; i < channelData.length; i++) {
+      const absValue = Math.abs(channelData[i]);
+      if (absValue > peak) {
+        peak = absValue;
+      }
+    }
+  }
+  
+  console.log('🎚️ Original peak level:', peak, '(', (20 * Math.log10(peak)).toFixed(1), 'dB)');
+  
+  // If the audio is silent, don't normalize
+  if (peak === 0) {
+    console.log('⚠️ Silent audio detected, skipping normalization');
+    return audioBuffer;
+  }
+  
+  // Calculate gain factor to bring peak to -0.1dB (0.977 linear)
+  const targetPeak = Math.pow(10, -0.1 / 20); // Convert -0.1dB to linear
+  const gainFactor = targetPeak / peak;
+  
+  console.log('🎯 Target peak level:', targetPeak, '(-0.1dB)');
+  console.log('📈 Gain factor:', gainFactor, '(', (20 * Math.log10(gainFactor)).toFixed(1), 'dB)');
+  
+  // Apply gain to all channels
+  for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+    const inputData = audioBuffer.getChannelData(channel);
+    const outputData = normalizedBuffer.getChannelData(channel);
+    
+    for (let i = 0; i < inputData.length; i++) {
+      let sample = inputData[i] * gainFactor;
+      
+      // Hard limiter to prevent clipping
+      if (sample > 0.99) sample = 0.99;
+      if (sample < -0.99) sample = -0.99;
+      
+      outputData[i] = sample;
+    }
+  }
+  
+  console.log('✅ Audio normalization completed');
+  return normalizedBuffer;
+};
+
 
 export function RecordingStudio() {
   console.log('RecordingStudio component initializing...');
@@ -525,8 +583,11 @@ export function RecordingStudio() {
             // Decode audio data
             const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
             
+            // Normalize audio to peak at -0.1dB with minimum at -12dB
+            const normalizedBuffer = normalizeAudioBuffer(audioBuffer, audioContextRef.current);
+            
             // Convert to WAV format and then to base64
-            const wavBuffer = AudioMixer.audioBufferToWav(audioBuffer);
+            const wavBuffer = AudioMixer.audioBufferToWav(normalizedBuffer);
             const base64Data = AudioMixer.arrayBufferToBase64(wavBuffer);
             
             // Add data URL prefix for proper format
@@ -542,10 +603,10 @@ export function RecordingStudio() {
               isPlaying: false,
               isMuted: false,
               volume: 1,
-              duration: audioBuffer.duration,
+              duration: normalizedBuffer.duration,
               startTime: compensatedStartTime, // Apply latency compensation
               trimStart: 0,
-              trimEnd: audioBuffer.duration
+              trimEnd: normalizedBuffer.duration
             };
 
             // Add track to current tracks
@@ -658,8 +719,11 @@ export function RecordingStudio() {
         length: audioBuffer.length
       });
       
+      // Normalize uploaded audio to peak at -0.1dB with minimum at -12dB
+      const normalizedBuffer = normalizeAudioBuffer(audioBuffer, audioContextRef.current!);
+      
       // Convert to WAV format and then to base64
-      const wavBuffer = AudioMixer.audioBufferToWav(audioBuffer);
+      const wavBuffer = AudioMixer.audioBufferToWav(normalizedBuffer);
       const base64Data = AudioMixer.arrayBufferToBase64(wavBuffer);
       const dataUrl = `data:audio/wav;base64,${base64Data}`;
       
@@ -670,7 +734,7 @@ export function RecordingStudio() {
         isPlaying: false,
         isMuted: false,
         volume: 1,
-        duration: audioBuffer.duration
+        duration: normalizedBuffer.duration
       };
 
       const updatedTracks = [...tracks, newTrack];
