@@ -159,6 +159,10 @@ export function WaveformBlock({
     const initialTrimEnd = trimEnd;
 
     if (action === 'drag') {
+      // Prevent dragging in trim mode
+      if (isInTrimMode) {
+        return;
+      }
       setIsDragging(true);
     } else if (action === 'resize-start') {
       setIsResizing('start');
