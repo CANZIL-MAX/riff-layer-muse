@@ -22,7 +22,7 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhone</key>
 	<true/>
-	<key>NSMicrophone UsageDescription</key>
+	<key>NSMicrophoneUsageDescription</key>
 	<string>This app requires access to your microphone to record audio for your projects.</string>
 	<key>UIFilesharingEnabled</key>
 	<true/>

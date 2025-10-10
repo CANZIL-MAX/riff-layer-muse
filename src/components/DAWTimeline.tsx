@@ -116,38 +116,19 @@ export const DAWTimeline = memo(function DAWTimeline({
     }
   }, [scroll, zoomIn, zoomOut]);
 
-  // Two-finger pan gesture handling for timeline navigation
-  const handleTouchStart = useCallback((event: React.TouchEvent) => {
-    if (event.touches.length === 2) {
-      // Two-finger gesture detected - enable pan mode
-      const touch1 = event.touches[0];
-      const touch2 = event.touches[1];
-      const centerX = (touch1.clientX + touch2.clientX) / 2;
-      
-      // Store initial position for pan calculation
-      (event.currentTarget as any)._panStartX = centerX;
-      (event.currentTarget as any)._panStartScroll = scrollPosition;
-    }
-  }, [scrollPosition]);
+  // Pinch-to-zoom gesture handling
+  const lastPinchDistance = useRef<number>(0);
+  const lastPinchZoom = useRef<number>(zoomLevel);
 
-  const handleTouchMove = useCallback((event: React.TouchEvent) => {
-    if (event.touches.length === 2) {
-      event.preventDefault(); // Prevent default zoom
-      
-      const touch1 = event.touches[0];
-      const touch2 = event.touches[1];
-      const centerX = (touch1.clientX + touch2.clientX) / 2;
-      
-      const panStartX = (event.currentTarget as any)._panStartX;
-      const panStartScroll = (event.currentTarget as any)._panStartScroll;
-      
-      if (panStartX !== undefined) {
-        const deltaX = panStartX - centerX;
-        const newScrollPosition = Math.max(0, Math.min(panStartScroll + deltaX, maxScrollPosition));
-        scroll(newScrollPosition - scrollPosition);
-      }
-    }
-  }, [scroll, scrollPosition, maxScrollPosition]);
+  const handlePinchZoom = useCallback((scale: number, centerX: number) => {
+    // Apply incremental zoom based on pinch scale
+    const newZoom = lastPinchZoom.current * scale;
+    setZoom(newZoom);
+  }, [setZoom]);
+
+  const handlePan = useCallback((deltaX: number) => {
+    scroll(deltaX);
+  }, [scroll]);
 
   const currentTimePosition = timeToPixels(currentTime) - scrollPosition;
   const recordingStartPosition = timeToPixels(recordingStartTime) - scrollPosition;
@@ -216,19 +197,22 @@ export const DAWTimeline = memo(function DAWTimeline({
             </div>
           </div>
 
-          {/* Scrollable timeline container with enhanced touch support */}
-          <div 
-            ref={scrollContainerRef}
+          {/* Scrollable timeline container with pinch-to-zoom support */}
+          <TimelinePanZoom 
+            onPan={handlePan}
+            onZoom={handlePinchZoom}
             className="flex-1 overflow-auto"
-            style={{ 
-              touchAction: 'pan-x', // Allow horizontal panning only
-              WebkitOverflowScrolling: 'touch'
-            }}
-            onWheel={handleWheel}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
           >
-            {/* Timeline content */}
+            <div 
+              ref={scrollContainerRef}
+              className="w-full h-full"
+              style={{ 
+                touchAction: 'none',
+                WebkitOverflowScrolling: 'touch'
+              }}
+               onWheel={handleWheel}
+            >
+              {/* Timeline content */}
             <div 
               className="relative"
               style={{ 
@@ -324,7 +308,8 @@ export const DAWTimeline = memo(function DAWTimeline({
                 )}
               </div>
             </div>
-          </div>
+            </div>
+          </TimelinePanZoom>
 
           {/* Timeline info */}
           <div className="px-4 py-2 border-t border-border bg-timeline/50 text-sm text-muted-foreground">

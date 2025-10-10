@@ -196,13 +196,17 @@ export function WaveformBlock({
         // Update local state for immediate visual feedback
         setLocalStartTime(newStartTime);
       } else if (action === 'resize-start') {
-        // Trimming: update local state only for smooth visual feedback
+        // Trimming from the start: adjust both trimStart and startTime
         const newTrimStart = Math.max(0, Math.min(initialTrimStart + deltaTime, initialTrimEnd - 0.1));
+        const trimDelta = newTrimStart - initialTrimStart;
         setLocalTrimStart(newTrimStart);
+        setLocalStartTime(initialStartTime + trimDelta); // Move block as we trim from start
+        setShowSnapIndicator(true);
       } else if (action === 'resize-end') {
-        // Trimming: update local state only for smooth visual feedback
+        // Trimming from the end: only adjust trimEnd
         const newTrimEnd = Math.max(initialTrimStart + 0.1, Math.min(initialTrimEnd + deltaTime, track.duration));
         setLocalTrimEnd(newTrimEnd);
+        setShowSnapIndicator(true);
       }
     };
 
@@ -217,10 +221,14 @@ export function WaveformBlock({
         console.log('🎯 Applying final startTime update:', localStartTime);
         onTrackUpdate(track.id, { startTime: localStartTime });
         setLocalStartTime(null);
-      } else if (action === 'resize-start' && localTrimStart !== null) {
-        console.log('✂️ Applying final trimStart update:', localTrimStart);
-        onTrackUpdate(track.id, { trimStart: localTrimStart });
+      } else if (action === 'resize-start' && localTrimStart !== null && localStartTime !== null) {
+        console.log('✂️ Applying final trimStart + startTime update:', { trimStart: localTrimStart, startTime: localStartTime });
+        onTrackUpdate(track.id, { 
+          trimStart: localTrimStart,
+          startTime: localStartTime 
+        });
         setLocalTrimStart(null);
+        setLocalStartTime(null);
       } else if (action === 'resize-end' && localTrimEnd !== null) {
         console.log('✂️ Applying final trimEnd update:', localTrimEnd);
         onTrackUpdate(track.id, { trimEnd: localTrimEnd });
