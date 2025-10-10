@@ -1315,7 +1315,7 @@ export function RecordingStudio() {
           onScrollToTime={setScrollToTimeFunction}
           soloTracks={soloTracks}
           onTrackUpdate={async (trackId, updates) => {
-            console.log('Track update called:', trackId, updates);
+            console.log('🔄 Track update called:', trackId, updates);
             
             const updatedTracks = tracks.map(track => {
               if (track.id === trackId) {
@@ -1328,21 +1328,25 @@ export function RecordingStudio() {
                   duration: updates.duration || track.duration,
                   volume: updates.volume !== undefined ? updates.volume : track.volume
                 };
-                console.log('Updated track:', updatedTrack);
+                console.log('✅ Updated track:', {
+                  id: updatedTrack.id,
+                  name: updatedTrack.name,
+                  startTime: updatedTrack.startTime,
+                  trimStart: updatedTrack.trimStart,
+                  trimEnd: updatedTrack.trimEnd,
+                  duration: updatedTrack.duration
+                });
                 return updatedTrack;
               }
               return track;
             });
             
-            console.log('All updated tracks:', updatedTracks);
             setTracks(updatedTracks);
             
-            // Only restart playback if startTime changed (moving the block)
-            // Don't restart for trim operations (trimStart/trimEnd changes)
-            const shouldRestartPlayback = isPlaying && 'startTime' in updates;
-            
-            if (shouldRestartPlayback) {
-              console.log('Restarting playback due to track position change');
+            // Restart playback if playing to reflect changes
+            // The WaveformBlock's local state prevents constant restarts during drag
+            if (isPlaying) {
+              console.log('🔁 Restarting playback to apply changes');
               PlaybackEngine.stop();
               const newPlayableTracks = soloTracks.size > 0 
                 ? updatedTracks.filter(track => soloTracks.has(track.id) && track.audioData)

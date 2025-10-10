@@ -214,12 +214,15 @@ export function WaveformBlock({
       
       // Apply final updates to track on mouseup - this prevents constant playback restarts
       if (action === 'drag' && localStartTime !== null) {
+        console.log('🎯 Applying final startTime update:', localStartTime);
         onTrackUpdate(track.id, { startTime: localStartTime });
         setLocalStartTime(null);
       } else if (action === 'resize-start' && localTrimStart !== null) {
+        console.log('✂️ Applying final trimStart update:', localTrimStart);
         onTrackUpdate(track.id, { trimStart: localTrimStart });
         setLocalTrimStart(null);
       } else if (action === 'resize-end' && localTrimEnd !== null) {
+        console.log('✂️ Applying final trimEnd update:', localTrimEnd);
         onTrackUpdate(track.id, { trimEnd: localTrimEnd });
         setLocalTrimEnd(null);
       }
