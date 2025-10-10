@@ -40,6 +40,10 @@ export function WaveformBlock({
   const [showSnapIndicator, setShowSnapIndicator] = useState(false);
   const [isLongPressing, setIsLongPressing] = useState(false);
   const [isInTrimMode, setIsInTrimMode] = useState(false);
+  // Local state for trim preview during dragging
+  const [localTrimStart, setLocalTrimStart] = useState<number | null>(null);
+  const [localTrimEnd, setLocalTrimEnd] = useState<number | null>(null);
+  const [localStartTime, setLocalStartTime] = useState<number | null>(null);
   const blockRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
@@ -82,9 +86,10 @@ export function WaveformBlock({
     loadAudioBuffer();
   }, [track.audioData, audioBuffer]);
 
-  const startTime = track.startTime || 0;
-  const trimStart = track.trimStart || 0;
-  const trimEnd = track.trimEnd || track.duration;
+  // Use local state during drag for smooth visual feedback, otherwise use track values
+  const startTime = localStartTime !== null ? localStartTime : (track.startTime || 0);
+  const trimStart = localTrimStart !== null ? localTrimStart : (track.trimStart || 0);
+  const trimEnd = localTrimEnd !== null ? localTrimEnd : (track.trimEnd || track.duration);
   const displayDuration = trimEnd - trimStart;
   
   const startPosition = timeToPixels(startTime);
@@ -154,9 +159,9 @@ export function WaveformBlock({
     // Calculate initial position relative to the timeline, accounting for scroll
     const startX = e.clientX - (timelineRect?.left || 0) + scrollOffset;
     
-    const initialStartTime = startTime;
-    const initialTrimStart = trimStart;
-    const initialTrimEnd = trimEnd;
+    const initialStartTime = track.startTime || 0;
+    const initialTrimStart = track.trimStart || 0;
+    const initialTrimEnd = track.trimEnd || track.duration;
 
     if (action === 'drag') {
       // Prevent dragging in trim mode
@@ -188,15 +193,16 @@ export function WaveformBlock({
           setShowSnapIndicator(false);
         }
         
-        onTrackUpdate(track.id, { startTime: newStartTime });
+        // Update local state for immediate visual feedback
+        setLocalStartTime(newStartTime);
       } else if (action === 'resize-start') {
-        // Fixed trimming: trim start without moving the rest
+        // Trimming: update local state only for smooth visual feedback
         const newTrimStart = Math.max(0, Math.min(initialTrimStart + deltaTime, initialTrimEnd - 0.1));
-        onTrackUpdate(track.id, { trimStart: newTrimStart });
+        setLocalTrimStart(newTrimStart);
       } else if (action === 'resize-end') {
-        // Fixed trimming: trim end without moving the rest
+        // Trimming: update local state only for smooth visual feedback
         const newTrimEnd = Math.max(initialTrimStart + 0.1, Math.min(initialTrimEnd + deltaTime, track.duration));
-        onTrackUpdate(track.id, { trimEnd: newTrimEnd });
+        setLocalTrimEnd(newTrimEnd);
       }
     };
 
@@ -205,6 +211,19 @@ export function WaveformBlock({
       setIsResizing(false);
       setShowSnapIndicator(false);
       setIsLongPressing(false);
+      
+      // Apply final updates to track on mouseup - this prevents constant playback restarts
+      if (action === 'drag' && localStartTime !== null) {
+        onTrackUpdate(track.id, { startTime: localStartTime });
+        setLocalStartTime(null);
+      } else if (action === 'resize-start' && localTrimStart !== null) {
+        onTrackUpdate(track.id, { trimStart: localTrimStart });
+        setLocalTrimStart(null);
+      } else if (action === 'resize-end' && localTrimEnd !== null) {
+        onTrackUpdate(track.id, { trimEnd: localTrimEnd });
+        setLocalTrimEnd(null);
+      }
+      
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('touchmove', handleTouchMove);
