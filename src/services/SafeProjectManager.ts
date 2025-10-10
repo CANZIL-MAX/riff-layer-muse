@@ -1,13 +1,14 @@
-// ESM imports with fallbacks for better mobile support
+// ESM imports with fallbacks for mobile support
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { Project, AudioTrack } from './ProjectManager';
 
 let isCapacitorAvailable = false;
 let FilesystemAPI: any = null;
 let DirectoryAPI: any = null;
 
 try {
-  // Check if Capacitor is available and native
+  // Check if Capacitor is available and running natively
   if (Capacitor && Capacitor.isNativePlatform()) {
     FilesystemAPI = Filesystem;
     DirectoryAPI = Directory;
@@ -21,12 +22,11 @@ try {
   isCapacitorAvailable = false;
 }
 
-import { Project, AudioTrack } from './ProjectManager';
-
 class SafeProjectManagerService {
   private isCapacitorAvailable = isCapacitorAvailable;
   private isInitialized = false;
   private memoryProjects: Map<string, Project> = new Map();
+  private nativeStorageVerified = false;
 
   async initialize() {
     console.log('🚀 SafeProjectManager initializing...');
@@ -36,71 +36,101 @@ class SafeProjectManagerService {
       console.log('📱 Native platform detected:', this.isCapacitorAvailable);
 
       if (this.isCapacitorAvailable && FilesystemAPI && DirectoryAPI) {
-        try {
-          console.log('📁 Setting up native filesystem for persistent storage...');
-          
-          // Try to create directories with detailed error handling
-          await FilesystemAPI.mkdir({
-            path: 'riff-layer-muse',
-            directory: DirectoryAPI.Documents,
-            recursive: true
-          });
-          
-          await FilesystemAPI.mkdir({
-            path: 'riff-layer-muse/projects',
-            directory: DirectoryAPI.Documents,
-            recursive: true
-          });
-          
-          // Test write/read to ensure filesystem is working
-          const testPath = 'riff-layer-muse/projects/test.json';
-          console.log('🧪 Testing filesystem write...');
-          await FilesystemAPI.writeFile({
-            path: testPath,
-            data: '{"test": true}',
-            directory: DirectoryAPI.Documents,
-            encoding: Encoding.UTF8
-          });
-          
-          console.log('🧪 Testing filesystem read...');
-          const testRead = await FilesystemAPI.readFile({
-            path: testPath,
-            directory: DirectoryAPI.Documents,
-            encoding: Encoding.UTF8
-          });
-          console.log('🧪 Test read result:', testRead.data);
-          
-          console.log('🧪 Testing filesystem delete...');
-          await FilesystemAPI.deleteFile({
-            path: testPath,
-            directory: DirectoryAPI.Documents
-          });
-          
-          console.log('✅ Native filesystem initialized and tested successfully');
-        } catch (error: any) {
-          console.warn('⚠️ Native filesystem failed, projects will not persist:', error.message);
-          this.isCapacitorAvailable = false;
-          
-          // Show toast warning about non-persistent storage
-          if (typeof window !== 'undefined') {
-            setTimeout(() => {
-              console.warn('📢 Storage warning: Projects will be lost on app restart');
-            }, 1000);
+        // Retry logic for initialization
+        let initSuccess = false;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            console.log(`📁 Initializing filesystem (attempt ${attempt}/3)...`);
+            
+            // Create base directory
+            try {
+              await FilesystemAPI.mkdir({
+                path: 'riff-layer-muse',
+                directory: DirectoryAPI.Documents,
+                recursive: true
+              });
+              console.log('✅ Base directory created/verified');
+            } catch (error: any) {
+              if (!error.message?.includes('exists')) {
+                throw error;
+              }
+              console.log('📁 Base directory already exists');
+            }
+
+            // Create projects directory
+            try {
+              await FilesystemAPI.mkdir({
+                path: 'riff-layer-muse/projects',
+                directory: DirectoryAPI.Documents,
+                recursive: true
+              });
+              console.log('✅ Projects directory created/verified');
+            } catch (error: any) {
+              if (!error.message?.includes('exists')) {
+                throw error;
+              }
+              console.log('📁 Projects directory already exists');
+            }
+            
+            // Test write
+            const testPath = 'riff-layer-muse/projects/test-verify.json';
+            const testData = JSON.stringify({ test: true, timestamp: Date.now() });
+            console.log('🧪 Testing filesystem write...');
+            
+            await FilesystemAPI.writeFile({
+              path: testPath,
+              data: testData,
+              directory: DirectoryAPI.Documents,
+              encoding: Encoding.UTF8
+            });
+            
+            // Verify by reading back
+            console.log('🧪 Verifying write...');
+            const readResult = await FilesystemAPI.readFile({
+              path: testPath,
+              directory: DirectoryAPI.Documents,
+              encoding: Encoding.UTF8
+            });
+            
+            const readData = typeof readResult.data === 'string' ? readResult.data : JSON.stringify(readResult.data);
+            console.log('🧪 Read back:', readData);
+            
+            // Clean up
+            await FilesystemAPI.deleteFile({
+              path: testPath,
+              directory: DirectoryAPI.Documents
+            });
+            
+            console.log('✅ Filesystem verified and working!');
+            this.nativeStorageVerified = true;
+            initSuccess = true;
+            break;
+            
+          } catch (error: any) {
+            console.error(`❌ Init attempt ${attempt} failed:`, error.message || error);
+            if (attempt < 3) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
           }
         }
+        
+        if (!initSuccess) {
+          throw new Error('Failed to initialize after 3 attempts');
+        }
       } else {
-        console.log('💾 No native filesystem available - memory-only mode');
+        console.log('📱 Not on native platform - using memory-only storage');
         this.isCapacitorAvailable = false;
       }
 
       this.isInitialized = true;
-      console.log('✅ SafeProjectManager initialized with storage mode:', this.isCapacitorAvailable ? 'native-persistent' : 'memory-only');
+      console.log('✅ SafeProjectManager ready -', this.nativeStorageVerified ? 'PERSISTENT' : 'MEMORY-ONLY');
       
-    } catch (error) {
-      console.error('❌ SafeProjectManager initialization error:', error);
+    } catch (error: any) {
+      console.error('❌ Init failed:', error.message || error);
       this.isCapacitorAvailable = false;
+      this.nativeStorageVerified = false;
       this.isInitialized = true;
-      console.log('🔄 Fallback to memory-only storage');
+      console.log('🔄 Fallback to memory-only');
     }
   }
 
@@ -122,50 +152,64 @@ class SafeProjectManagerService {
 
     // Store in memory immediately
     this.memoryProjects.set(project.id, project);
-    console.log('Created new project:', project.name, 'Storage:', this.isCapacitorAvailable ? 'native' : 'memory');
+    console.log('📝 Created project:', project.name, '| Storage:', this.nativeStorageVerified ? 'PERSISTENT' : 'MEMORY-ONLY');
     
     return project;
   }
 
   async saveProject(project: Project): Promise<void> {
-    console.log('Saving project:', project.name, 'Storage mode:', this.isCapacitorAvailable ? 'native' : 'memory');
+    console.log('💾 Saving project:', project.name);
     
     // Always save to memory first
     this.memoryProjects.set(project.id, { ...project });
 
-    if (this.isCapacitorAvailable && FilesystemAPI && DirectoryAPI) {
+    if (this.isCapacitorAvailable && this.nativeStorageVerified && FilesystemAPI && DirectoryAPI) {
       try {
         const projectData = JSON.stringify(project, null, 2);
         const filePath = `riff-layer-muse/projects/${project.id}.json`;
-        console.log('💾 Writing project to filesystem:', filePath);
         
+        console.log('📝 Writing to filesystem:', filePath);
         await FilesystemAPI.writeFile({
           path: filePath,
           data: projectData,
           directory: DirectoryAPI.Documents,
           encoding: Encoding.UTF8
         });
-        console.log('✅ Project saved to filesystem successfully');
+        
+        // Verify write by reading back
+        console.log('🔍 Verifying write...');
+        const verifyRead = await FilesystemAPI.readFile({
+          path: filePath,
+          directory: DirectoryAPI.Documents,
+          encoding: Encoding.UTF8
+        });
+        
+        if (verifyRead.data) {
+          console.log('✅ Project saved and verified on filesystem');
+        } else {
+          throw new Error('Verification failed - no data read back');
+        }
       } catch (error: any) {
         console.error('❌ Failed to save to filesystem:', error.message || error);
-        console.error('Full error:', JSON.stringify(error, null, 2));
+        console.error('📋 Full error:', JSON.stringify(error, null, 2));
+        throw error; // Don't silently fail
       }
     } else {
-      console.warn('⚠️ Not using native storage - project only in memory');
+      console.warn('⚠️ Project saved to MEMORY ONLY - will be lost on app restart');
     }
   }
 
   async loadProject(projectId: string): Promise<Project> {
-    console.log('Loading project:', projectId);
+    console.log('📂 Loading project:', projectId);
     
     // Try memory first
     const memoryProject = this.memoryProjects.get(projectId);
     if (memoryProject) {
-      console.log('Loaded project from memory');
+      console.log('✅ Loaded from memory');
       return memoryProject;
     }
 
-    // Try filesystem if available
+    // Try filesystem
     if (this.isCapacitorAvailable && FilesystemAPI && DirectoryAPI) {
       try {
         const result = await FilesystemAPI.readFile({
@@ -176,7 +220,7 @@ class SafeProjectManagerService {
         
         const project = JSON.parse(result.data as string);
         this.memoryProjects.set(projectId, project);
-        console.log('✅ Loaded project from filesystem');
+        console.log('✅ Loaded from filesystem');
         return project;
       } catch (error: any) {
         console.error('❌ Failed to load from filesystem:', error.message || error);
@@ -187,45 +231,64 @@ class SafeProjectManagerService {
   }
 
   async getAllProjects(): Promise<Project[]> {
-    console.log('Getting all projects, storage mode:', this.isCapacitorAvailable ? 'native' : 'memory');
+    console.log('📂 Getting all projects...');
     
     const projects: Project[] = [];
     
     // Get from memory
     projects.push(...Array.from(this.memoryProjects.values()));
+    console.log('💾 Projects in memory:', projects.length);
 
-    // Try to get from filesystem if available and we don't have any in memory
+    // Try to get from filesystem if no projects in memory
     if (this.isCapacitorAvailable && FilesystemAPI && DirectoryAPI && projects.length === 0) {
       try {
-        console.log('📂 Reading projects from filesystem...');
+        console.log('📂 Reading from filesystem...');
         const result = await FilesystemAPI.readdir({
           path: 'riff-layer-muse/projects',
           directory: DirectoryAPI.Documents
         });
-        console.log('📋 Found files:', result.files.length);
+        
+        console.log('📋 Raw readdir result:', JSON.stringify(result, null, 2));
+        
+        // Handle different API responses
+        let files: any[] = [];
+        if (result && typeof result === 'object') {
+          if (Array.isArray(result.files)) {
+            files = result.files;
+          } else if (Array.isArray(result)) {
+            files = result;
+          }
+        }
+        
+        console.log('📁 Files found:', files.length);
 
-        for (const file of result.files) {
-          if (file.name && file.name.endsWith('.json')) {
-            try {
-              console.log('📖 Loading project file:', file.name);
-              const projectData = await FilesystemAPI.readFile({
-                path: `riff-layer-muse/projects/${file.name}`,
-                directory: DirectoryAPI.Documents,
-                encoding: Encoding.UTF8
-              });
-              
-              const project = JSON.parse(projectData.data as string);
-              projects.push(project);
-              this.memoryProjects.set(project.id, project);
-              console.log('✅ Loaded project:', project.name);
-            } catch (error: any) {
-              console.error(`❌ Failed to load project ${file.name}:`, error.message || error);
+        for (const file of files) {
+          if (file && (typeof file === 'string' ? file.endsWith('.json') : file.name?.endsWith('.json'))) {
+            const fileName = typeof file === 'string' ? file : file.name;
+            if (fileName && fileName !== 'test-verify.json' && fileName !== 'test-release.json') {
+              try {
+                console.log('📖 Loading:', fileName);
+                const projectData = await FilesystemAPI.readFile({
+                  path: `riff-layer-muse/projects/${fileName}`,
+                  directory: DirectoryAPI.Documents,
+                  encoding: Encoding.UTF8
+                });
+                
+                const project = JSON.parse(projectData.data as string);
+                projects.push(project);
+                this.memoryProjects.set(project.id, project);
+                console.log('✅ Loaded:', project.name);
+              } catch (error: any) {
+                console.error(`❌ Failed to load ${fileName}:`, error.message || error);
+              }
             }
           }
         }
-        console.log('📊 Total projects loaded from filesystem:', projects.length);
+        
+        console.log('📊 Total projects loaded:', projects.length);
       } catch (error: any) {
         console.error('❌ Failed to read projects directory:', error.message || error);
+        console.error('📋 Full error:', JSON.stringify(error, null, 2));
       }
     }
 
@@ -235,7 +298,7 @@ class SafeProjectManagerService {
   }
 
   async deleteProject(projectId: string): Promise<void> {
-    console.log('Deleting project:', projectId);
+    console.log('🗑️ Deleting project:', projectId);
     
     // Remove from memory
     this.memoryProjects.delete(projectId);
@@ -247,180 +310,107 @@ class SafeProjectManagerService {
           path: `riff-layer-muse/projects/${projectId}.json`,
           directory: DirectoryAPI.Documents
         });
-        console.log('Project deleted from filesystem');
-      } catch (error) {
-        console.warn('Failed to delete from filesystem:', error);
+        console.log('✅ Project deleted from filesystem');
+      } catch (error: any) {
+        console.warn('⚠️ Failed to delete from filesystem:', error.message || error);
       }
     }
   }
 
   async shareAudioFile(audioData: string, fileName: string): Promise<void> {
     try {
-      console.log('🎵 Attempting to share audio file:', fileName);
-      console.log('📊 Audio data length:', audioData?.length || 0);
+      console.log('🎵 Sharing audio file:', fileName);
       
       if (!audioData) {
-        throw new Error('No audio data provided for export');
+        throw new Error('No audio data provided');
       }
 
-      // Handle different audio data formats
-      let processedData: string;
-      if (audioData.startsWith('data:')) {
-        processedData = audioData.replace(/^data:audio\/[^;]+;base64,/, '');
-      } else {
-        processedData = audioData;
+      // Remove data URL prefix if present
+      const base64Data = audioData.replace(/^data:audio\/[^;]+;base64,/, '');
+
+      // Validate base64
+      if (!/^[A-Za-z0-9+/=]+$/.test(base64Data)) {
+        throw new Error('Invalid base64 audio data');
       }
 
-      // Validate base64 format
-      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(processedData)) {
-        throw new Error('Invalid base64 audio data format');
-      }
-      
-      // Always prioritize native file sharing on mobile
-      if (this.isCapacitorAvailable && Capacitor?.isNativePlatform?.()) {
+      // Use native share on mobile
+      if (this.isCapacitorAvailable && Capacitor.isNativePlatform()) {
+        const { Share } = await import('@capacitor/share');
+        const { Filesystem, Directory } = await import('@capacitor/filesystem');
+        
+        const exportFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const filePath = `riff-layer-muse/exports/${exportFileName}`;
+        
         try {
-          const { Share } = await import('@capacitor/share');
-          const { Directory, Filesystem } = await import('@capacitor/filesystem');
-          
-          // Write file to Documents directory for iOS Files app access
-          const exportFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-          
-          // Try multiple directory creation approaches with fallbacks
-          let writePath = '';
-          let writeDirectory = Directory.Documents;
-          
-          try {
-            // First, try creating the app-specific directory structure
-            const appPath = 'riff-layer-muse';
-            const exportsPath = 'riff-layer-muse/exports';
-            
-            console.log('🔧 Creating directory structure...');
-            
-            // Create app directory first
-            try {
-              await Filesystem.mkdir({
-                path: appPath,
-                directory: Directory.Documents,
-                recursive: true
-              });
-              console.log('✅ App directory created/verified');
-            } catch (error) {
-              console.log('📁 App directory already exists');
-            }
-            
-            // Create exports subdirectory
-            try {
-              await Filesystem.mkdir({
-                path: exportsPath,
-                directory: Directory.Documents,
-                recursive: true
-              });
-              console.log('✅ Exports directory created/verified');
-            } catch (error) {
-              console.log('📁 Exports directory already exists');
-            }
-            
-            // Verify directory exists by listing contents
-            const dirContents = await Filesystem.readdir({
-              path: appPath,
-              directory: Directory.Documents
-            });
-            console.log('📂 Directory contents:', dirContents);
-            
-            writePath = `${exportsPath}/${exportFileName}`;
-            writeDirectory = Directory.Documents;
-            
-          } catch (dirError: any) {
-            console.warn('⚠️ Documents directory setup failed, using Cache fallback:', dirError?.message);
-            // Fallback to Cache directory
-            try {
-              await Filesystem.mkdir({
-                path: 'exports',
-                directory: Directory.Cache,
-                recursive: true
-              });
-              writePath = `exports/${exportFileName}`;
-              writeDirectory = Directory.Cache;
-              console.log('✅ Using Cache directory fallback');
-            } catch (cacheError: any) {
-              console.warn('⚠️ Cache directory setup also failed:', cacheError?.message);
-              // Last resort - write directly to root
-              writePath = exportFileName;
-              writeDirectory = Directory.Documents;
-            }
-          }
-          
-          console.log(`💾 Writing file to: ${writePath} in ${writeDirectory}`);
-          
-          // Write the file
-          await Filesystem.writeFile({
-            path: writePath,
-            data: processedData,
-            directory: writeDirectory
+          await Filesystem.mkdir({
+            path: 'riff-layer-muse/exports',
+            directory: Directory.Documents,
+            recursive: true
           });
-          
-          // Get the file URI for sharing
-          const fileUri = await Filesystem.getUri({
-            directory: writeDirectory,
-            path: writePath
-          });
-          
-          console.log('📁 File saved to Documents:', fileUri.uri);
-          
-          // Use native share sheet to let user choose export location
-          await Share.share({
-            title: 'Export Audio Recording',
-            text: `Share or save: ${fileName}`,
-            url: fileUri.uri,
-            dialogTitle: 'Choose where to save or share'
-          });
-          
-          console.log('✅ Native file export completed - user can access via Files app');
-          return;
-          
-        } catch (shareError) {
-          console.warn('⚠️ Native share failed:', shareError);
-          throw shareError; // Don't fallback, show the error
-        }
-      }
-      
-      // Fallback for web browsers
-      try {
-        const binaryString = atob(processedData);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
+        } catch {
         }
         
-        const blob = new Blob([bytes], { type: 'audio/wav' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        await Filesystem.writeFile({
+          path: filePath,
+          data: base64Data,
+          directory: Directory.Documents
+        });
         
-        console.log('✅ Browser download initiated');
-      } catch (decodeError) {
-        console.error('❌ Failed to decode audio data:', decodeError);
-        throw new Error(`Failed to process audio data: ${decodeError.message}`);
+        const fileUri = await Filesystem.getUri({
+          path: filePath,
+          directory: Directory.Documents
+        });
+        
+        await Share.share({
+          title: 'Export Audio',
+          text: `Share or save: ${fileName}`,
+          url: fileUri.uri,
+          dialogTitle: 'Choose where to save or share'
+        });
+        
+        console.log('✅ Native share completed');
+        return;
       }
       
-    } catch (error) {
-      console.error('❌ Failed to share audio file:', error);
-      throw new Error(`Export failed: ${error.message}. Make sure you have sufficient storage space.`);
+      // Browser fallback
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      const blob = new Blob([bytes], { type: 'audio/wav' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      console.log('✅ Browser download initiated');
+      
+    } catch (error: any) {
+      console.error('❌ Failed to share audio:', error.message || error);
+      throw new Error(`Export failed: ${error.message}`);
     }
   }
 
   getStorageMode(): 'native' | 'memory' {
-    return this.isCapacitorAvailable ? 'native' : 'memory';
+    return this.nativeStorageVerified ? 'native' : 'memory';
   }
 
   isNativeStorageAvailable(): boolean {
-    return this.isCapacitorAvailable;
+    return this.nativeStorageVerified;
+  }
+
+  getStorageStatus(): { verified: boolean, available: boolean } {
+    return {
+      verified: this.nativeStorageVerified,
+      available: this.isCapacitorAvailable
+    };
   }
 }
 
