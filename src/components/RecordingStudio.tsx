@@ -1337,9 +1337,12 @@ export function RecordingStudio() {
             console.log('All updated tracks:', updatedTracks);
             setTracks(updatedTracks);
             
-            // If we're currently playing, restart playback with new positions
-            if (isPlaying) {
-              console.log('Restarting playback due to track update');
+            // Only restart playback if startTime changed (moving the block)
+            // Don't restart for trim operations (trimStart/trimEnd changes)
+            const shouldRestartPlayback = isPlaying && 'startTime' in updates;
+            
+            if (shouldRestartPlayback) {
+              console.log('Restarting playback due to track position change');
               PlaybackEngine.stop();
               const newPlayableTracks = soloTracks.size > 0 
                 ? updatedTracks.filter(track => soloTracks.has(track.id) && track.audioData)
