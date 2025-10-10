@@ -1,6 +1,6 @@
 // ESM imports with fallbacks for better mobile support
 import { Capacitor } from '@capacitor/core';
-import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 
 let isCapacitorAvailable = false;
 let FilesystemAPI: any = null;
@@ -54,13 +54,23 @@ class SafeProjectManagerService {
           
           // Test write/read to ensure filesystem is working
           const testPath = 'riff-layer-muse/projects/test.json';
+          console.log('🧪 Testing filesystem write...');
           await FilesystemAPI.writeFile({
             path: testPath,
             data: '{"test": true}',
             directory: DirectoryAPI.Documents,
-            encoding: 'utf8' as any
+            encoding: Encoding.UTF8
           });
           
+          console.log('🧪 Testing filesystem read...');
+          const testRead = await FilesystemAPI.readFile({
+            path: testPath,
+            directory: DirectoryAPI.Documents,
+            encoding: Encoding.UTF8
+          });
+          console.log('🧪 Test read result:', testRead.data);
+          
+          console.log('🧪 Testing filesystem delete...');
           await FilesystemAPI.deleteFile({
             path: testPath,
             directory: DirectoryAPI.Documents
@@ -126,16 +136,22 @@ class SafeProjectManagerService {
     if (this.isCapacitorAvailable && FilesystemAPI && DirectoryAPI) {
       try {
         const projectData = JSON.stringify(project, null, 2);
+        const filePath = `riff-layer-muse/projects/${project.id}.json`;
+        console.log('💾 Writing project to filesystem:', filePath);
+        
         await FilesystemAPI.writeFile({
-          path: `riff-layer-muse/projects/${project.id}.json`,
+          path: filePath,
           data: projectData,
           directory: DirectoryAPI.Documents,
-          encoding: 'utf8' as any
+          encoding: Encoding.UTF8
         });
-        console.log('Project saved to filesystem successfully');
-      } catch (error) {
-        console.warn('Failed to save to filesystem, kept in memory:', error);
+        console.log('✅ Project saved to filesystem successfully');
+      } catch (error: any) {
+        console.error('❌ Failed to save to filesystem:', error.message || error);
+        console.error('Full error:', JSON.stringify(error, null, 2));
       }
+    } else {
+      console.warn('⚠️ Not using native storage - project only in memory');
     }
   }
 
@@ -155,15 +171,15 @@ class SafeProjectManagerService {
         const result = await FilesystemAPI.readFile({
           path: `riff-layer-muse/projects/${projectId}.json`,
           directory: DirectoryAPI.Documents,
-          encoding: 'utf8' as any
+          encoding: Encoding.UTF8
         });
         
         const project = JSON.parse(result.data as string);
         this.memoryProjects.set(projectId, project);
-        console.log('Loaded project from filesystem');
+        console.log('✅ Loaded project from filesystem');
         return project;
-      } catch (error) {
-        console.warn('Failed to load from filesystem:', error);
+      } catch (error: any) {
+        console.error('❌ Failed to load from filesystem:', error.message || error);
       }
     }
 
@@ -181,30 +197,35 @@ class SafeProjectManagerService {
     // Try to get from filesystem if available and we don't have any in memory
     if (this.isCapacitorAvailable && FilesystemAPI && DirectoryAPI && projects.length === 0) {
       try {
+        console.log('📂 Reading projects from filesystem...');
         const result = await FilesystemAPI.readdir({
           path: 'riff-layer-muse/projects',
           directory: DirectoryAPI.Documents
         });
+        console.log('📋 Found files:', result.files.length);
 
         for (const file of result.files) {
-          if (file.name.endsWith('.json')) {
+          if (file.name && file.name.endsWith('.json')) {
             try {
+              console.log('📖 Loading project file:', file.name);
               const projectData = await FilesystemAPI.readFile({
                 path: `riff-layer-muse/projects/${file.name}`,
                 directory: DirectoryAPI.Documents,
-                encoding: 'utf8' as any
+                encoding: Encoding.UTF8
               });
               
               const project = JSON.parse(projectData.data as string);
               projects.push(project);
               this.memoryProjects.set(project.id, project);
-            } catch (error) {
-              console.warn(`Failed to load project ${file.name}:`, error);
+              console.log('✅ Loaded project:', project.name);
+            } catch (error: any) {
+              console.error(`❌ Failed to load project ${file.name}:`, error.message || error);
             }
           }
         }
-      } catch (error) {
-        console.warn('Failed to read projects directory:', error);
+        console.log('📊 Total projects loaded from filesystem:', projects.length);
+      } catch (error: any) {
+        console.error('❌ Failed to read projects directory:', error.message || error);
       }
     }
 
