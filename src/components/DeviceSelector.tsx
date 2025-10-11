@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Mic, RefreshCw, Smartphone } from 'lucide-react';
+import { Mic, RefreshCw, Smartphone, Headphones } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNativePlatform } from '@/hooks/useNativePlatform';
+import AudioInput, { AudioDevice } from '@/plugins/AudioInputPlugin';
 
 interface DeviceSelectorProps {
   selectedDeviceId: string | null;
@@ -13,82 +14,95 @@ interface DeviceSelectorProps {
 
 export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelectorProps) {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [nativeDevices, setNativeDevices] = useState<AudioDevice[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [permissionState, setPermissionState] = useState<'unknown' | 'granted' | 'denied'>('unknown');
   const { toast } = useToast();
-  const { isNative, platform } = useNativePlatform();
+  const { isNative } = useNativePlatform();
+
+  const fetchNativeDevices = async () => {
+    setIsLoading(true);
+    try {
+      console.log('🎧 Fetching available audio input devices...');
+      const result = await AudioInput.getAvailableInputs();
+      console.log('🎧 Available devices:', result.devices);
+      setNativeDevices(result.devices);
+      
+      // Auto-select current device
+      const current = await AudioInput.getCurrentInput();
+      if (current.device) {
+        console.log('🎧 Current device:', current.device);
+        onDeviceChange(current.device.portUID);
+        setPermissionState('granted');
+      }
+      
+      if (result.devices.length > 0) {
+        setPermissionState('granted');
+      }
+    } catch (error) {
+      console.error('Error fetching native devices:', error);
+      toast({
+        title: "Error",
+        description: "Could not fetch audio devices. Please check microphone permissions.",
+        variant: "destructive",
+      });
+      setPermissionState('denied');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleNativeDeviceChange = async (portUID: string) => {
+    try {
+      const result = await AudioInput.setPreferredInput({ portUID });
+      onDeviceChange(portUID);
+      
+      toast({
+        title: "Device Switched",
+        description: result.message,
+      });
+    } catch (error) {
+      console.error('Error switching device:', error);
+      toast({
+        title: "Error",
+        description: "Could not switch audio device.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const requestNativePermissions = async () => {
     setIsLoading(true);
     try {
-      // Import Capacitor dynamically to avoid issues on web
-      const { Capacitor } = await import('@capacitor/core');
+      // Request microphone permission via MediaDevices API
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: { ideal: 44100 },
+          channelCount: { ideal: 2 }
+        } 
+      });
       
-      if (Capacitor.isNativePlatform()) {
-        console.log('Requesting native microphone permissions...');
-        
-        // Check current permission status
-        const { Device } = await import('@capacitor/device');
-        
-        // Try to access microphone to trigger permission dialog
-        try {
-          // First, try with basic audio constraints
-          const stream = await navigator.mediaDevices.getUserMedia({ 
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-              // This helps iOS detect Bluetooth devices like AirPods
-              sampleRate: { ideal: 44100 },
-              channelCount: { ideal: 2 }
-            } 
-          });
-          
-          // Check available audio devices on iOS (limited but can detect some info)
-          const audioTrack = stream.getAudioTracks()[0];
-          const settings = audioTrack.getSettings();
-          const capabilities = audioTrack.getCapabilities();
-          
-          console.log('🎧 Audio device settings:', settings);
-          console.log('🎧 Audio device capabilities:', capabilities);
-          
-          // Detect if we're using a Bluetooth device (AirPods, etc.)
-          const isBluetoothDevice = settings.deviceId && (
-            settings.deviceId.includes('bluetooth') ||
-            (settings.groupId && settings.groupId.includes('bluetooth')) ||
-            (capabilities && capabilities.deviceId && Array.isArray(capabilities.deviceId) && 
-             capabilities.deviceId.some(id => id.includes('bluetooth')))
-          );
-          
-          console.log('🎧 Detected Bluetooth device:', isBluetoothDevice);
-          
-          stream.getTracks().forEach(track => track.stop()); // Clean up
-          setPermissionState('granted');
-          
-          // Set appropriate device ID based on detection
-          const deviceType = isBluetoothDevice ? 'bluetooth-microphone' : 'default-native-microphone';
-          onDeviceChange(deviceType);
-          
-          toast({
-            title: "Microphone Access Granted",
-            description: isBluetoothDevice 
-              ? "Bluetooth microphone (AirPods) detected and ready!" 
-              : "Built-in microphone ready for recording.",
-          });
-        } catch (error) {
-          console.error('Microphone permission denied:', error);
-          setPermissionState('denied');
-          
-          toast({
-            title: "Microphone Permission Required",
-            description: "Please enable microphone access in Settings > Privacy & Security > Microphone > riff-layer-muse",
-            variant: "destructive",
-          });
-        }
-      }
+      stream.getTracks().forEach(track => track.stop());
+      
+      // Now fetch native devices
+      await fetchNativeDevices();
+      
+      toast({
+        title: "Microphone Access Granted",
+        description: "You can now select your audio input device.",
+      });
     } catch (error) {
-      console.error('Error requesting native permissions:', error);
+      console.error('Microphone permission denied:', error);
       setPermissionState('denied');
+      
+      toast({
+        title: "Microphone Permission Required",
+        description: "Please enable microphone access in Settings > Privacy & Security > Microphone > riff-layer-muse",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -142,23 +156,42 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
   useEffect(() => {
     enumerateDevices();
     
-    // Listen for device changes - with compatibility check
+    // Listen for native device changes
+    if (isNative) {
+      const listener = AudioInput.addListener('audioRouteChanged', async (event) => {
+        console.log('🎧 Audio route changed:', event.reason);
+        await fetchNativeDevices();
+        
+        toast({
+          title: "Audio Route Changed",
+          description: event.reason === 'deviceConnected' 
+            ? "New audio device connected" 
+            : event.reason === 'deviceDisconnected'
+            ? "Audio device disconnected"
+            : "Audio routing changed",
+        });
+      });
+      
+      return () => {
+        listener.then(l => AudioInput.removeAllListeners());
+      };
+    }
+    
+    // Listen for device changes on web
     const handleDeviceChange = () => {
       enumerateDevices();
     };
     
     let cleanup: (() => void) | null = null;
     
-    if (navigator.mediaDevices) {
+    if (navigator.mediaDevices && !isNative) {
       if (navigator.mediaDevices.addEventListener) {
-        // Modern browsers
         console.log('Using addEventListener for device changes');
         navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
         cleanup = () => {
           navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
         };
       } else if ('ondevicechange' in navigator.mediaDevices) {
-        // iOS Safari fallback
         console.log('Using ondevicechange for device changes');
         navigator.mediaDevices.ondevicechange = handleDeviceChange;
         cleanup = () => {
@@ -172,9 +205,10 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
         cleanup();
       }
     };
-  }, []);
+  }, [isNative]);
 
   const selectedDevice = devices.find(device => device.deviceId === selectedDeviceId);
+  const selectedNativeDevice = nativeDevices.find(device => device.portUID === selectedDeviceId);
 
   // Render native iOS interface
   if (isNative) {
@@ -183,54 +217,91 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Smartphone className="w-4 h-4" />
-            Device Microphone
+            Audio Input Device
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Button
-              variant={permissionState === 'granted' ? 'default' : 'outline'}
-              size="sm"
-              onClick={enumerateDevices}
-              disabled={isLoading}
-              className="flex-1"
-            >
-              {isLoading ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-                  Checking permissions...
-                </>
-              ) : permissionState === 'granted' ? (
-                <>
-                  <Mic className="w-4 h-4 mr-2" />
-                  Microphone Ready
-                </>
-              ) : (
-                <>
-                  <Mic className="w-4 h-4 mr-2" />
-                  Allow Microphone Access
-                </>
+          {permissionState === 'unknown' || permissionState === 'denied' ? (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={requestNativePermissions}
+                disabled={isLoading}
+                className="w-full"
+              >
+                {isLoading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                    Checking permissions...
+                  </>
+                ) : (
+                  <>
+                    <Mic className="w-4 h-4 mr-2" />
+                    Allow Microphone Access
+                  </>
+                )}
+              </Button>
+              
+              {permissionState === 'denied' && (
+                <div className="space-y-2">
+                  <p className="text-xs text-destructive">
+                    Microphone access denied. To enable recording:
+                  </p>
+                  <ol className="text-xs text-muted-foreground space-y-1 ml-4 list-decimal">
+                    <li>Go to Settings → Privacy & Security → Microphone</li>
+                    <li>Find "riff-layer-muse" and toggle it on</li>
+                    <li>Return to the app and tap "Allow Microphone Access"</li>
+                  </ol>
+                </div>
               )}
-            </Button>
-          </div>
-          
-          {permissionState === 'granted' && (
-            <p className="text-xs text-muted-foreground">
-              Using: {selectedDeviceId === 'bluetooth-microphone' ? '🎧 Bluetooth microphone (AirPods)' : '📱 Built-in microphone'}
-            </p>
-          )}
-          
-          {permissionState === 'denied' && (
-            <div className="space-y-2">
-              <p className="text-xs text-destructive">
-                Microphone access denied. To enable recording:
-              </p>
-              <ol className="text-xs text-muted-foreground space-y-1 ml-4 list-decimal">
-                <li>Go to Settings → Privacy & Security → Microphone</li>
-                <li>Find "riff-layer-muse" and toggle it on</li>
-                <li>Return to the app and tap "Allow Microphone Access"</li>
-              </ol>
-            </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <Select 
+                  value={selectedDeviceId || ''} 
+                  onValueChange={handleNativeDeviceChange}
+                  disabled={isLoading || nativeDevices.length === 0}
+                >
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder={
+                      isLoading 
+                        ? "Loading devices..." 
+                        : nativeDevices.length === 0 
+                          ? "No devices found" 
+                          : "Select input device"
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {nativeDevices.map((device) => (
+                      <SelectItem key={device.portUID} value={device.portUID}>
+                        <span className="flex items-center gap-2">
+                          {device.isBluetooth ? '🎧' : '📱'} {device.portName}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={fetchNativeDevices}
+                  disabled={isLoading}
+                  className="px-3"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                </Button>
+              </div>
+              
+              {selectedNativeDevice && (
+                <p className="text-xs text-muted-foreground flex items-center gap-2">
+                  {selectedNativeDevice.isBluetooth ? <Headphones className="w-3 h-3" /> : <Smartphone className="w-3 h-3" />}
+                  Using: {selectedNativeDevice.portName}
+                </p>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

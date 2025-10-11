@@ -437,14 +437,33 @@ export function RecordingStudio() {
       
       // Detect device-specific latency
       let deviceLatency = 0;
-      const deviceName = selectedDeviceId?.toLowerCase() || '';
       
-      if (deviceName.includes('airpods') || deviceName.includes('bluetooth')) {
-        deviceLatency = 0.15; // AirPods typical latency
-      } else if (deviceName.includes('usb') || deviceName.includes('interface')) {
-        deviceLatency = 0.005; // USB audio interface
+      // Import AudioInput plugin dynamically for native platforms
+      if (isNative) {
+        try {
+          const AudioInput = (await import('@/plugins/AudioInputPlugin')).default;
+          const current = await AudioInput.getCurrentInput();
+          
+          if (current.device && current.device.isBluetooth) {
+            deviceLatency = 0.15; // Bluetooth devices (AirPods, etc.)
+          } else {
+            deviceLatency = 0.02; // Built-in microphone
+          }
+        } catch (error) {
+          console.warn('Could not detect device type for latency:', error);
+          deviceLatency = 0.02; // Default to built-in mic latency
+        }
       } else {
-        deviceLatency = 0.02; // Built-in microphone
+        // Web platform - check device name
+        const deviceName = selectedDeviceId?.toLowerCase() || '';
+        
+        if (deviceName.includes('bluetooth')) {
+          deviceLatency = 0.15; // Bluetooth devices
+        } else if (deviceName.includes('usb') || deviceName.includes('interface')) {
+          deviceLatency = 0.005; // USB audio interface
+        } else {
+          deviceLatency = 0.02; // Built-in microphone
+        }
       }
       
       // Calculate total latency with buffer analysis compensation
