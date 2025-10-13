@@ -10,6 +10,7 @@ import { DeviceSelector } from '@/components/DeviceSelector';
 import { MetronomeControls } from '@/components/MetronomeControls';
 import { NativeExportDialog } from '@/components/NativeExportDialog';
 import { useNativePlatform } from '@/hooks/useNativePlatform';
+import AudioInput from '@/plugins/AudioInputPlugin';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -437,10 +438,9 @@ export function RecordingStudio() {
       // Detect device-specific latency
       let deviceLatency = 0;
       
-      // Import AudioInput plugin dynamically for native platforms
+      // Check audio input for native platforms
       if (isNative) {
         try {
-          const AudioInput = (await import('@/plugins/AudioInputPlugin')).default;
           const current = await AudioInput.getCurrentInput();
           
           if (current.device && current.device.isBluetooth) {
