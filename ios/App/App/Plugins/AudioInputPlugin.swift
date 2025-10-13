@@ -9,12 +9,25 @@ public class AudioInputPlugin: CAPPlugin {
     @objc func getAvailableInputs(_ call: CAPPluginCall) {
         let session = AVAudioSession.sharedInstance()
         
-        guard let inputs = session.availableInputs else {
-            call.resolve(["devices": []])
+        // Ensure audio session is active before querying devices
+        do {
+            try session.setActive(true)
+        } catch {
+            print("⚠️ Could not activate audio session: \(error.localizedDescription)")
+            call.reject("Failed to activate audio session: \(error.localizedDescription)")
             return
         }
         
+        guard let inputs = session.availableInputs else {
+            print("⚠️ No audio inputs available. Session category: \(session.category.rawValue)")
+            call.resolve(["devices": [], "error": "No inputs available"])
+            return
+        }
+        
+        print("🎧 Found \(inputs.count) audio input devices")
+        
         let devices = inputs.map { input -> [String: Any] in
+            print("  📱 Device: \(input.portName) (\(input.portType.rawValue))")
             return [
                 "portUID": input.uid,
                 "portName": input.portName,
@@ -30,10 +43,20 @@ public class AudioInputPlugin: CAPPlugin {
     @objc func getCurrentInput(_ call: CAPPluginCall) {
         let session = AVAudioSession.sharedInstance()
         
+        // Ensure audio session is active
+        do {
+            try session.setActive(true)
+        } catch {
+            print("⚠️ Could not activate audio session: \(error.localizedDescription)")
+        }
+        
         guard let currentRoute = session.currentRoute.inputs.first else {
+            print("⚠️ No current input route")
             call.resolve(["device": nil])
             return
         }
+        
+        print("🎤 Current input: \(currentRoute.portName)")
         
         let device: [String: Any] = [
             "portUID": currentRoute.uid,

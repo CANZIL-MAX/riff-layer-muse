@@ -26,6 +26,20 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
       console.log('🎧 Fetching available audio input devices...');
       const result = await AudioInput.getAvailableInputs();
       console.log('🎧 Available devices:', result.devices);
+      
+      if (result.devices.length === 0) {
+        console.warn('⚠️ No audio devices found. Make sure:');
+        console.warn('  1. Microphone permission is granted');
+        console.warn('  2. AirPods/Bluetooth device is connected');
+        console.warn('  3. Device is selected in iOS Bluetooth settings');
+        
+        toast({
+          title: "No Audio Devices Found",
+          description: "Please connect your AirPods or other audio device and tap refresh.",
+          variant: "default",
+        });
+      }
+      
       setNativeDevices(result.devices);
       
       // Auto-select current device
@@ -33,6 +47,11 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
       if (current.device) {
         console.log('🎧 Current device:', current.device);
         onDeviceChange(current.device.portUID);
+        setPermissionState('granted');
+      } else if (result.devices.length > 0) {
+        // If we have devices but none is current, select the first one
+        console.log('🎧 Auto-selecting first device:', result.devices[0]);
+        onDeviceChange(result.devices[0].portUID);
         setPermissionState('granted');
       }
       
@@ -86,6 +105,10 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
       });
       
       stream.getTracks().forEach(track => track.stop());
+      
+      // Wait 500ms for audio session to stabilize
+      console.log('⏳ Waiting for audio session to stabilize...');
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       // Now fetch native devices
       await fetchNativeDevices();
