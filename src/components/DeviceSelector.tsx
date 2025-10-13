@@ -23,9 +23,12 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
   const fetchNativeDevices = async () => {
     setIsLoading(true);
     try {
-      console.log('🎧 Fetching available audio input devices...');
+      console.log('🎧 [NATIVE] Fetching available audio input devices...');
+      console.log('🎧 [NATIVE] Platform check - isNative:', isNative);
       const result = await AudioInput.getAvailableInputs();
-      console.log('🎧 Available devices:', result.devices);
+      console.log('🎧 [NATIVE] Raw result from plugin:', JSON.stringify(result, null, 2));
+      console.log('🎧 [NATIVE] Available devices count:', result.devices?.length || 0);
+      console.log('🎧 [NATIVE] Available devices:', result.devices);
       
       if (result.devices.length === 0) {
         console.warn('⚠️ No audio devices found. Make sure:');
@@ -43,9 +46,11 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
       setNativeDevices(result.devices);
       
       // Auto-select current device
+      console.log('🎧 [NATIVE] Checking current input device...');
       const current = await AudioInput.getCurrentInput();
+      console.log('🎧 [NATIVE] Current input result:', JSON.stringify(current, null, 2));
       if (current.device) {
-        console.log('🎧 Current device:', current.device);
+        console.log('🎧 [NATIVE] Current device:', current.device);
         onDeviceChange(current.device.portUID);
         setPermissionState('granted');
       } else if (result.devices.length > 0) {
@@ -93,8 +98,9 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
   const requestNativePermissions = async () => {
     setIsLoading(true);
     try {
+      console.log('🎤 [NATIVE] Requesting microphone permissions...');
       // Request microphone permission via MediaDevices API
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
@@ -104,11 +110,13 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
         } 
       });
       
+      console.log('🎤 [NATIVE] Microphone permission granted, stopping test stream...');
       stream.getTracks().forEach(track => track.stop());
       
       // Wait 500ms for audio session to stabilize
-      console.log('⏳ Waiting for audio session to stabilize...');
+      console.log('⏳ [NATIVE] Waiting for audio session to stabilize...');
       await new Promise(resolve => setTimeout(resolve, 500));
+      console.log('⏳ [NATIVE] Audio session should be ready now');
       
       // Now fetch native devices
       await fetchNativeDevices();
