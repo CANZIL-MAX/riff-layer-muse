@@ -418,8 +418,7 @@ export function RecordingStudio() {
 
   const startRecordingWithOptions = async (withPlayback: boolean) => {
     try {
-      // Set recording start time to current timeline position
-      setRecordingStartTime(currentTime);
+      // Recording start time will be set right before mediaRecorder.start()
       
       // Play count-in if enabled
       if (showCountIn && isMetronomeEnabled) {
@@ -539,6 +538,14 @@ export function RecordingStudio() {
         }
       };
 
+      // Set recording start time RIGHT BEFORE starting the recorder
+      const actualStartTime = currentTime;
+      setRecordingStartTime(actualStartTime);
+      
+      const recordingStartTimestamp = performance.now();
+      console.log(`🎙️ MediaRecorder.start() called at: ${recordingStartTimestamp}ms`);
+      console.log(`📍 Timeline position when recording starts: ${actualStartTime}s`);
+      
       mediaRecorder.start(100); // Collect data every 100ms for better quality
       setIsRecording(true);
       
@@ -612,12 +619,12 @@ export function RecordingStudio() {
             // Add data URL prefix for proper format
             const dataUrl = `data:audio/wav;base64,${base64Data}`;
             
-            // Create new track with automatic 150ms latency compensation
-            const RECORDING_LATENCY_MS = 150;
-            const compensatedStartTime = Math.max(0, recordingStartTime - (RECORDING_LATENCY_MS / 1000));
+            // Create new track with dynamic latency compensation
+            const compensatedStartTime = Math.max(0, recordingStartTime - latencyCompensation);
             
-            console.log(`⏱️ Recording latency compensation: ${RECORDING_LATENCY_MS}ms`);
-            console.log(`📍 Original start time: ${recordingStartTime}s, Compensated: ${compensatedStartTime}s`);
+            console.log(`🔧 Applied latency compensation: ${latencyCompensation}s (${(latencyCompensation * 1000).toFixed(2)}ms)`);
+            console.log(`📊 Audio buffer duration: ${normalizedBuffer.duration}s`);
+            console.log(`📍 Start time - Original: ${recordingStartTime}s, Compensated: ${compensatedStartTime}s`);
             
             const newTrack = {
               id: Date.now().toString(),
