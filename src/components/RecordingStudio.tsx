@@ -612,8 +612,12 @@ export function RecordingStudio() {
             // Add data URL prefix for proper format
             const dataUrl = `data:audio/wav;base64,${base64Data}`;
             
-            // Create new track with latency compensation
-            const compensatedStartTime = Math.max(0, recordingStartTime - latencyCompensation);
+            // Create new track with automatic 150ms latency compensation
+            const RECORDING_LATENCY_MS = 150;
+            const compensatedStartTime = Math.max(0, recordingStartTime - (RECORDING_LATENCY_MS / 1000));
+            
+            console.log(`⏱️ Recording latency compensation: ${RECORDING_LATENCY_MS}ms`);
+            console.log(`📍 Original start time: ${recordingStartTime}s, Compensated: ${compensatedStartTime}s`);
             
             const newTrack = {
               id: Date.now().toString(),
@@ -623,7 +627,7 @@ export function RecordingStudio() {
               isMuted: false,
               volume: 1,
               duration: normalizedBuffer.duration,
-              startTime: compensatedStartTime, // Apply latency compensation
+              startTime: compensatedStartTime, // Automatically shifted back 150ms
               trimStart: 0,
               trimEnd: normalizedBuffer.duration
             };
