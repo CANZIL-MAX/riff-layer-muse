@@ -7,11 +7,16 @@ public class AudioInputPlugin: CAPPlugin {
     
     // Get all available audio input devices
     @objc func getAvailableInputs(_ call: CAPPluginCall) {
+        print("🎧 AudioInputPlugin.getAvailableInputs called")
         let session = AVAudioSession.sharedInstance()
         
         // Ensure audio session is active before querying devices
         do {
+            print("🎧 Setting audio session category to playAndRecord...")
+            try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetooth, .defaultToSpeaker])
+            print("🎧 Activating audio session...")
             try session.setActive(true)
+            print("🎧 Audio session activated successfully")
         } catch {
             print("⚠️ Could not activate audio session: \(error.localizedDescription)")
             call.reject("Failed to activate audio session: \(error.localizedDescription)")
@@ -70,11 +75,14 @@ public class AudioInputPlugin: CAPPlugin {
     
     // Set preferred input device
     @objc func setPreferredInput(_ call: CAPPluginCall) {
+        print("🎧 AudioInputPlugin.setPreferredInput called")
         guard let portUID = call.getString("portUID") else {
+            print("⚠️ Port UID required but not provided")
             call.reject("Port UID required")
             return
         }
         
+        print("🎧 Attempting to set preferred input to: \(portUID)")
         let session = AVAudioSession.sharedInstance()
         
         // Find the input port matching the UID
@@ -86,11 +94,13 @@ public class AudioInputPlugin: CAPPlugin {
         
         do {
             try session.setPreferredInput(selectedInput)
+            print("✅ Successfully set preferred input to: \(selectedInput.portName)")
             call.resolve([
                 "success": true,
                 "message": "Switched to \(selectedInput.portName)"
             ])
         } catch {
+            print("⚠️ Failed to set preferred input: \(error.localizedDescription)")
             call.reject("Failed to set preferred input: \(error.localizedDescription)")
         }
     }
