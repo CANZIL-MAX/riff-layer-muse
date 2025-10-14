@@ -65,31 +65,10 @@ public class AudioInputPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func getCurrentInput(_ call: CAPPluginCall) {
         let session = AVAudioSession.sharedInstance()
         
-<<<<<<< Updated upstream
         // Don't reactivate - session is already configured
         guard let currentInput = session.currentRoute.inputs.first else {
             call.resolve(["device": NSNull()])
             return
-=======
-        do {
-            try session.setActive(true)
-            
-            guard let currentInput = session.currentRoute.inputs.first else {
-                call.resolve(["device": NSNull()])
-                return
-            }
-            
-            let device = [
-                "portUID": currentInput.uid,
-                "portName": currentInput.portName,
-                "portType": currentInput.portType.rawValue,
-                "isBluetooth": currentInput.portType == .bluetoothHFP || currentInput.portType == .bluetoothA2DP || currentInput.portType == .bluetoothLE
-            ] as [String : Any]
-            
-            call.resolve(["device": device])
-        } catch {
-            call.reject("Failed to get current input: \(error.localizedDescription)")
->>>>>>> Stashed changes
         }
         
         let device = [
