@@ -177,10 +177,8 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
         <CardContent className="space-y-3">
           <div className="flex items-center gap-2">
             <Select 
-              value={selectedDeviceId || "none"} 
-              onValueChange={(value) => {
-                if (value !== "none") handleNativeDeviceChange(value);
-              }}
+              value={selectedDeviceId ?? undefined} 
+              onValueChange={handleNativeDeviceChange}
               disabled={isLoading || nativeDevices.length === 0}
             >
               <SelectTrigger className="flex-1">
@@ -235,10 +233,8 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
       <CardContent className="space-y-3">
         <div className="flex items-center gap-2">
             <Select 
-              value={selectedDeviceId || "none"} 
-              onValueChange={(value) => {
-                if (value !== "none") onDeviceChange(value);
-              }}
+              value={selectedDeviceId ?? undefined} 
+              onValueChange={(value) => onDeviceChange(value || null)}
               disabled={isLoading || devices.length === 0}
             >
             <SelectTrigger className="flex-1">
