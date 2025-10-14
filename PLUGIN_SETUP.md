@@ -15,25 +15,18 @@ The AudioInputPlugin is now structured as a proper Capacitor plugin and will aut
    npm install
    ```
 
-3. **Link the local plugin (first time only):**
-   ```bash
-   cd plugins/audio-input-plugin
-   npm link
-   cd ../..
-   npm link audio-input-plugin
-   ```
-
-4. **Add iOS platform (first time only):**
+3. **Add iOS platform (first time only):**
    ```bash
    npx cap add ios
    ```
 
-5. **Sync Capacitor (auto-configures plugin in Xcode):**
+4. **Build and sync:**
    ```bash
+   npm run build
    npx cap sync ios
    ```
 
-6. **Open and build in Xcode:**
+5. **Open and build in Xcode:**
    ```bash
    npx cap open ios
    ```
@@ -60,9 +53,9 @@ Now `npx cap sync ios` does all of this automatically! 🎉
 
 Whenever you `git pull` new changes:
 ```bash
-npm install                    # Update dependencies
-npm link audio-input-plugin    # Re-link local plugin if needed
-npx cap sync ios              # Auto-configure in Xcode
+npm install          # Update dependencies
+npm run build        # Build the project
+npx cap sync ios     # Auto-configure in Xcode
 ```
 
 Then just build in Xcode - no manual configuration needed!

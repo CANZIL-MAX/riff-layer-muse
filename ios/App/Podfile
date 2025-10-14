@@ -3,6 +3,9 @@ require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
 platform :ios, '13.0'
 use_frameworks!
 
+# Specify Xcode project
+project 'App.xcodeproj'
+
 # workaround to avoid Xcode caching of Pods that requires
 # Product -> Clean Build Folder after new Cordova plugins installed
 # Requires CocoaPods 1.6 or newer
@@ -15,6 +18,7 @@ def capacitor_pods
   pod 'CapacitorFilesystem', :path => '../../node_modules/@capacitor/filesystem'
   pod 'CapacitorHaptics', :path => '../../node_modules/@capacitor/haptics'
   pod 'CapacitorShare', :path => '../../node_modules/@capacitor/share'
+  pod 'AudioInputPlugin', :path => '../../plugins/audio-input-plugin'
 end
 
 target 'App' do

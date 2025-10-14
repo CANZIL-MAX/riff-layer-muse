@@ -52,7 +52,7 @@ git pull
 ```bash
 git pull
 npm install
-npm link audio-input-plugin
+npm run build
 npx cap sync ios
 # Open Xcode and build - Done!
 ```
@@ -97,7 +97,7 @@ For existing setups:
 ### Plugin Registration
 The plugin is registered through:
 1. `capacitor.config.ts`: `includePlugins: ['AudioInputPlugin']`
-2. Symbolic link: `npm link audio-input-plugin`
+2. `ios/App/Podfile`: Direct path reference to local plugin
 3. Native code: `CAP_PLUGIN(AudioInputPlugin, ...)`
 
 ## Next Steps
@@ -111,7 +111,7 @@ The plugin is registered through:
 
 If you encounter issues:
 1. Check that all steps in `PLUGIN_SETUP.md` were followed
-2. Ensure `npm link audio-input-plugin` was successful
+2. Ensure `npm run build` completed successfully
 3. Verify `npx cap sync ios` completed without errors
 4. Clean Xcode Derived Data if needed: `rm -rf ~/Library/Developer/Xcode/DerivedData`
 
