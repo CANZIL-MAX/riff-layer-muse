@@ -19,6 +19,23 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
   const fetchNativeDevices = async () => {
     setIsLoading(true);
     try {
+      // Request microphone permission first - this triggers iOS prompt
+      console.log('🎧 [NATIVE] Requesting microphone permission...');
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+        console.log('✅ [NATIVE] Microphone permission granted');
+      } catch (permError) {
+        console.error('❌ [NATIVE] Microphone permission denied:', permError);
+        toast({
+          title: "Microphone Permission Required",
+          description: "Please enable microphone access in iOS Settings",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+      
       console.log('🎧 [NATIVE] Fetching available audio input devices...');
       const result = await AudioInput.getAvailableInputs();
       console.log('🎧 [NATIVE] Available devices:', result.devices?.length || 0);
