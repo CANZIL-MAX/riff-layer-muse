@@ -70,7 +70,7 @@ export class SafeErrorBoundary extends Component<Props, State> {
               color: '#ccc',
               lineHeight: '1.5'
             }}>
-              The audio workstation encountered an unexpected error. This might be due to browser compatibility or missing audio permissions.
+              The audio workstation encountered an unexpected error. This might be due to browser compatibility issues.
             </p>
             
             <div style={{
@@ -127,7 +127,7 @@ export class SafeErrorBoundary extends Component<Props, State> {
               color: '#666',
               lineHeight: '1.4'
             }}>
-              Make sure your browser supports Web Audio API and has microphone permissions enabled.
+              Make sure your browser supports Web Audio API.
             </p>
           </div>
         </div>
