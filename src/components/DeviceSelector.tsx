@@ -14,39 +14,36 @@ interface DeviceSelectorProps {
 export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelectorProps) {
   const [nativeDevices, setNativeDevices] = useState<AudioDevice[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasPermission, setHasPermission] = useState(false);
   const { toast } = useToast();
 
+  const requestMicrophonePermission = async () => {
+    try {
+      console.log('🎧 [NATIVE] Requesting microphone permission...');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop());
+      console.log('✅ [NATIVE] Microphone permission granted');
+      setHasPermission(true);
+      return true;
+    } catch (error) {
+      console.error('❌ [NATIVE] Microphone permission denied:', error);
+      toast({
+        title: "Microphone Permission Required",
+        description: "Please enable microphone access in iOS Settings",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
   const fetchNativeDevices = async () => {
+    if (!hasPermission) return;
+    
     setIsLoading(true);
     try {
-      // Request microphone permission first - this triggers iOS prompt
-      console.log('🎧 [NATIVE] Requesting microphone permission...');
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach(track => track.stop());
-        console.log('✅ [NATIVE] Microphone permission granted');
-      } catch (permError) {
-        console.error('❌ [NATIVE] Microphone permission denied:', permError);
-        toast({
-          title: "Microphone Permission Required",
-          description: "Please enable microphone access in iOS Settings",
-          variant: "destructive",
-        });
-        setIsLoading(false);
-        return;
-      }
-      
       console.log('🎧 [NATIVE] Fetching available audio input devices...');
       const result = await AudioInput.getAvailableInputs();
       console.log('🎧 [NATIVE] Available devices:', result.devices?.length || 0);
-      
-      if (result.devices.length === 0) {
-        toast({
-          title: "No Audio Devices Found",
-          description: "Please connect your audio device and tap refresh.",
-          variant: "default",
-        });
-      }
       
       setNativeDevices(result.devices);
       
@@ -59,11 +56,6 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
       }
     } catch (error) {
       console.error('❌ Error fetching devices:', error);
-      toast({
-        title: "Error",
-        description: "Could not fetch audio devices.",
-        variant: "destructive",
-      });
     } finally {
       setIsLoading(false);
     }
@@ -89,25 +81,27 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
   };
 
   useEffect(() => {
-    console.log('🎧 [NATIVE] Initializing native audio device handling');
-    fetchNativeDevices();
+    const initializeAudio = async () => {
+      console.log('🎧 [NATIVE] Initializing audio...');
+      const granted = await requestMicrophonePermission();
+      if (granted) {
+        await fetchNativeDevices();
+      }
+    };
+    
+    initializeAudio();
     
     const listener = AudioInput.addListener('audioRouteChanged', async (event) => {
       console.log('🎧 Audio route changed:', event.reason);
-      await fetchNativeDevices();
-      
-      toast({
-        title: "Audio Route Changed",
-        description: event.reason === 'deviceConnected' 
-          ? "New audio device connected" 
-          : event.reason === 'deviceDisconnected'
-          ? "Audio device disconnected"
-          : "Audio routing changed",
-      });
+      // Silently refresh device list when routes change
+      if (hasPermission) {
+        const result = await AudioInput.getAvailableInputs();
+        setNativeDevices(result.devices);
+      }
     });
     
     return () => {
-      listener.then(l => AudioInput.removeAllListeners());
+      listener.then(() => AudioInput.removeAllListeners());
     };
   }, []);
 
