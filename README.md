@@ -65,7 +65,10 @@ This project is built with:
 
 This project includes native iOS support with a custom AudioInputPlugin located in `src/native-plugins/audio-input-plugin/`.
 
-For detailed setup instructions, see [PLUGIN_SETUP.md](./PLUGIN_SETUP.md) and [QUICK_START.md](./QUICK_START.md).
+For detailed setup instructions, see:
+- [QUICK_START.md](./QUICK_START.md) - 5-minute setup guide
+- [PLUGIN_SETUP.md](./PLUGIN_SETUP.md) - Plugin configuration
+- [KNOWN_ISSUES.md](./KNOWN_ISSUES.md) - Troubleshooting guide
 
 Quick start:
 1. Clone the repo or download ZIP from Lovable

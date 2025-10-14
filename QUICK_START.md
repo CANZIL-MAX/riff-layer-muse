@@ -158,6 +158,7 @@ riff-layer-muse/
 
 - 📖 [Full Setup Guide](PLUGIN_SETUP.md)
 - 🔧 [Technical Details](RESTRUCTURE_SUMMARY.md)
+- ⚠️ [Known Issues & Solutions](KNOWN_ISSUES.md)
 - 🐛 Issues? Check [GitHub Issues](https://github.com/CANZIL-MAX/riff-layer-muse/issues)
 
 ## Next Steps
