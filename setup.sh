@@ -24,7 +24,7 @@ if [ ! -f "package.json" ]; then
 fi
 
 # Step 1: Initialize Git (if not already initialized)
-echo -e "${YELLOW}[1/5] Initializing Git repository...${NC}"
+echo -e "${YELLOW}[1/6] Initializing Git repository...${NC}"
 if [ ! -d ".git" ]; then
     git init
     echo -e "${GREEN}✓ Git initialized${NC}"
@@ -34,7 +34,7 @@ fi
 echo ""
 
 # Step 2: Connect to GitHub repository
-echo -e "${YELLOW}[2/5] Connecting to GitHub repository...${NC}"
+echo -e "${YELLOW}[2/6] Connecting to GitHub repository...${NC}"
 REPO_URL="https://github.com/CANZIL-MAX/riff-layer-muse.git"
 
 # Remove existing remote if it exists
@@ -47,7 +47,7 @@ echo -e "${GREEN}✓ Connected to $REPO_URL${NC}"
 echo ""
 
 # Step 3: Pull latest changes from GitHub
-echo -e "${YELLOW}[3/5] Pulling latest changes from GitHub...${NC}"
+echo -e "${YELLOW}[3/6] Pulling latest changes from GitHub...${NC}"
 echo -e "${RED}WARNING: This will overwrite any local changes!${NC}"
 read -p "Continue? (y/n): " -n 1 -r
 echo ""
@@ -64,14 +64,23 @@ echo -e "${GREEN}✓ Latest changes pulled${NC}"
 echo ""
 
 # Step 4: Install dependencies
-echo -e "${YELLOW}[4/5] Installing npm dependencies...${NC}"
+echo -e "${YELLOW}[4/6] Installing npm dependencies...${NC}"
 echo "This may take a few minutes..."
 npm install
 echo -e "${GREEN}✓ Dependencies installed${NC}"
 echo ""
 
-# Step 5: Sync Capacitor iOS
-echo -e "${YELLOW}[5/5] Syncing Capacitor for iOS...${NC}"
+# Step 5: Link local AudioInputPlugin
+echo -e "${YELLOW}[5/6] Linking local AudioInputPlugin...${NC}"
+cd plugins/audio-input-plugin
+npm link
+cd ../..
+npm link audio-input-plugin
+echo -e "${GREEN}✓ Local plugin linked${NC}"
+echo ""
+
+# Step 6: Sync Capacitor iOS
+echo -e "${YELLOW}[6/6] Syncing Capacitor for iOS...${NC}"
 npx cap sync ios
 echo -e "${GREEN}✓ Capacitor synced${NC}"
 echo ""

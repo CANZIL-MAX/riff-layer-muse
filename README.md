@@ -59,6 +59,18 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
+- Capacitor (for native iOS/Android apps)
+
+## Native Mobile App Setup
+
+This project includes native iOS support with custom audio input management.
+
+For detailed setup instructions, see [PLUGIN_SETUP.md](./PLUGIN_SETUP.md).
+
+Quick start:
+1. Clone the repo
+2. Run `./setup.sh` for automated setup
+3. Open in Xcode: `npx cap open ios`
 
 ## How can I deploy this project?
 

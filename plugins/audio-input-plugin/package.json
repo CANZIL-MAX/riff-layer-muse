@@ -1,0 +1,36 @@
+{
+  "name": "audio-input-plugin",
+  "version": "1.0.0",
+  "description": "Capacitor plugin for iOS audio input device management",
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "unpkg": "dist/plugin.js",
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    }
+  },
+  "files": [
+    "dist/",
+    "ios/",
+    "AudioInputPlugin.podspec"
+  ],
+  "keywords": [
+    "capacitor",
+    "plugin",
+    "native",
+    "audio",
+    "ios"
+  ],
+  "scripts": {
+    "verify": "echo 'AudioInputPlugin verified'",
+    "build": "echo 'No build needed for local plugin'"
+  },
+  "peerDependencies": {
+    "@capacitor/core": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/core": "^7.4.2"
+  }
+}

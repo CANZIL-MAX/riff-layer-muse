@@ -5,7 +5,11 @@ const config: CapacitorConfig = {
   appName: 'riff-layer-muse',
   webDir: 'dist',
   // Native app configuration - no server for offline operation
+  includePlugins: ['AudioInputPlugin'],
   plugins: {
+    AudioInputPlugin: {
+      // Local plugin configuration
+    },
     Filesystem: {
       directory: 'Documents'
     },
