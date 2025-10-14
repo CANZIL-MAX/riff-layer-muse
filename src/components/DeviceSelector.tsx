@@ -30,9 +30,12 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
       console.log('🎧 [NATIVE] Available devices count:', result.devices?.length || 0);
       console.log('🎧 [NATIVE] Available devices:', result.devices);
       
+      // Having devices means permission is granted, even if empty list
+      setPermissionState('granted');
+      
       if (result.devices.length === 0) {
         console.warn('⚠️ No audio devices found. Make sure:');
-        console.warn('  1. Microphone permission is granted');
+        console.warn('  1. Microphone permission is granted in iOS Settings');
         console.warn('  2. AirPods/Bluetooth device is connected');
         console.warn('  3. Device is selected in iOS Bluetooth settings');
         
@@ -52,25 +55,19 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
       if (current.device) {
         console.log('🎧 [NATIVE] Current device:', current.device);
         onDeviceChange(current.device.portUID);
-        setPermissionState('granted');
       } else if (result.devices.length > 0) {
         // If we have devices but none is current, select the first one
         console.log('🎧 Auto-selecting first device:', result.devices[0]);
         onDeviceChange(result.devices[0].portUID);
-        setPermissionState('granted');
-      }
-      
-      if (result.devices.length > 0) {
-        setPermissionState('granted');
       }
     } catch (error) {
-      console.error('Error fetching native devices:', error);
+      console.error('❌ Error fetching native devices:', error);
+      // Don't set denied here - this error might be for other reasons
       toast({
         title: "Error",
-        description: "Could not fetch audio devices. Please check microphone permissions.",
+        description: "Could not fetch audio devices. Please try refreshing.",
         variant: "destructive",
       });
-      setPermissionState('denied');
     } finally {
       setIsLoading(false);
     }
