@@ -177,7 +177,7 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
         <CardContent className="space-y-3">
           <div className="flex items-center gap-2">
             <Select 
-              value={selectedDeviceId || ''} 
+              value={selectedDeviceId || undefined} 
               onValueChange={handleNativeDeviceChange}
               disabled={isLoading || nativeDevices.length === 0}
             >
@@ -235,7 +235,7 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
       <CardContent className="space-y-3">
         <div className="flex items-center gap-2">
           <Select 
-            value={selectedDeviceId || ''} 
+            value={selectedDeviceId || undefined} 
             onValueChange={(value) => onDeviceChange(value || null)}
             disabled={isLoading || devices.length === 0}
           >
