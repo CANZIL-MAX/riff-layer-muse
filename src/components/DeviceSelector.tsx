@@ -8,8 +8,8 @@ import { useNativePlatform } from '@/hooks/useNativePlatform';
 import AudioInput, { AudioDevice } from '@/plugins/AudioInputPlugin';
 
 interface DeviceSelectorProps {
-  selectedDeviceId: string | null;
-  onDeviceChange: (deviceId: string | null) => void;
+  selectedDeviceId: string;
+  onDeviceChange: (deviceId: string) => void;
 }
 
 export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelectorProps) {
@@ -177,7 +177,7 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
         <CardContent className="space-y-3">
           <div className="flex items-center gap-2">
             <Select 
-              value={selectedDeviceId ?? undefined} 
+              value={selectedDeviceId || nativeDevices[0]?.portUID || ''} 
               onValueChange={handleNativeDeviceChange}
               disabled={isLoading || nativeDevices.length === 0}
             >
@@ -233,8 +233,8 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
       <CardContent className="space-y-3">
         <div className="flex items-center gap-2">
             <Select 
-              value={selectedDeviceId ?? undefined} 
-              onValueChange={(value) => onDeviceChange(value || null)}
+              value={selectedDeviceId || devices[0]?.deviceId || ''} 
+              onValueChange={onDeviceChange}
               disabled={isLoading || devices.length === 0}
             >
             <SelectTrigger className="flex-1">
