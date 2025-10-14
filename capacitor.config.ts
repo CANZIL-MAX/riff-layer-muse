@@ -2,10 +2,12 @@ import { CapacitorConfig } from '@capacitor/core';
 
 const config: CapacitorConfig = {
   appId: 'com.lovable.rifflayermuse',
-  appName: 'riff-layer-muse',
+  appName: 'Riff Layer Muse',
   webDir: 'dist',
-  // Native app configuration - no server for offline operation
+  // Native app configuration
   includePlugins: ['AudioInputPlugin'],
+  // Bundle web assets for offline operation
+  bundledWebRuntime: false,
   plugins: {
     AudioInputPlugin: {
       // Local plugin configuration

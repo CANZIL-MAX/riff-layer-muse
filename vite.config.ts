@@ -31,15 +31,41 @@ export default defineConfig(({ mode }) => ({
     sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          audio: ['@capacitor/filesystem', '@capacitor/share']
+        manualChunks: (id) => {
+          // Core dependencies
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+            return 'vendor-react';
+          }
+          // UI components
+          if (id.includes('node_modules/@radix-ui')) {
+            return 'vendor-ui';
+          }
+          // Capacitor plugins
+          if (id.includes('node_modules/@capacitor')) {
+            return 'vendor-capacitor';
+          }
+          // Audio components (lazy loaded)
+          if (id.includes('src/components/Recording') || 
+              id.includes('src/components/Audio') ||
+              id.includes('src/components/Track')) {
+            return 'audio-components';
+          }
+          // Services
+          if (id.includes('src/services')) {
+            return 'services';
+          }
         }
       }
     },
     // Ensure proper asset handling for native apps
     assetsDir: 'assets',
-    outDir: 'dist'
+    outDir: 'dist',
+    // Optimize chunk size
+    chunkSizeWarningLimit: 1000,
+  },
+  // Web Worker support
+  worker: {
+    format: 'es',
   },
   define: {
     // Ensure proper environment detection for native apps

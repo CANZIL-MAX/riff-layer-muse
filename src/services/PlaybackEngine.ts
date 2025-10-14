@@ -9,6 +9,10 @@ export class PlaybackEngineService {
   private masterGainNode: GainNode | null = null;
   private onTimeUpdateCallback?: (currentTime: number) => void;
   private animationFrameId?: number;
+  
+  // Audio buffer cache for performance
+  private audioBufferCache: Map<string, AudioBuffer> = new Map();
+  private maxCacheSize: number = 50; // Limit cache size
 
   async initialize(): Promise<void> {
     if (!this.audioContext) {
@@ -238,6 +242,12 @@ export class PlaybackEngineService {
   private async base64ToAudioBuffer(base64Data: string): Promise<AudioBuffer> {
     if (!this.audioContext) throw new Error('AudioContext not initialized');
 
+    // Check cache first
+    const cacheKey = base64Data.substring(0, 100); // Use first 100 chars as cache key
+    if (this.audioBufferCache.has(cacheKey)) {
+      return this.audioBufferCache.get(cacheKey)!;
+    }
+
     try {
       const cleanBase64 = base64Data.replace(/^data:audio\/[^;]+;base64,/, '');
       const binaryString = atob(cleanBase64);
@@ -247,11 +257,27 @@ export class PlaybackEngineService {
         bytes[i] = binaryString.charCodeAt(i);
       }
 
-      return await this.audioContext.decodeAudioData(bytes.buffer);
+      const audioBuffer = await this.audioContext.decodeAudioData(bytes.buffer);
+      
+      // Cache the decoded audio buffer
+      if (this.audioBufferCache.size >= this.maxCacheSize) {
+        // Remove oldest entry (first key)
+        const firstKey = this.audioBufferCache.keys().next().value;
+        if (firstKey) {
+          this.audioBufferCache.delete(firstKey);
+        }
+      }
+      this.audioBufferCache.set(cacheKey, audioBuffer);
+      
+      return audioBuffer;
     } catch (error) {
       console.error('Failed to decode audio data:', error);
       throw error;
     }
+  }
+
+  clearCache(): void {
+    this.audioBufferCache.clear();
   }
 
   getIsPlaying(): boolean {
