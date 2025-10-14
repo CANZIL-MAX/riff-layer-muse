@@ -143,15 +143,15 @@ npx cap sync ios
 
 ```
 riff-layer-muse/
-├── src/                      # React source code
-│   ├── components/          # UI components
-│   ├── services/            # Audio engine services
-│   └── plugins/             # Plugin exports
-├── plugins/                 # Native plugins
-│   └── audio-input-plugin/  # iOS audio input plugin
-├── ios/                     # iOS native project
-│   └── App/                 # Xcode project
-└── setup.sh                 # Automated setup script
+├── src/                         # React source code
+│   ├── components/             # UI components
+│   ├── services/               # Audio engine services
+│   ├── plugins/                # Plugin exports
+│   └── native-plugins/         # Native plugin packages
+│       └── audio-input-plugin/ # iOS audio input plugin
+├── ios/                        # iOS native project
+│   └── App/                    # Xcode project
+└── setup.sh                    # Automated setup script
 ```
 
 ## Getting Help

@@ -63,14 +63,17 @@ This project is built with:
 
 ## Native Mobile App Setup
 
-This project includes native iOS support with custom audio input management.
+This project includes native iOS support with a custom AudioInputPlugin located in `src/native-plugins/audio-input-plugin/`.
 
-For detailed setup instructions, see [PLUGIN_SETUP.md](./PLUGIN_SETUP.md).
+For detailed setup instructions, see [PLUGIN_SETUP.md](./PLUGIN_SETUP.md) and [QUICK_START.md](./QUICK_START.md).
 
 Quick start:
-1. Clone the repo
+1. Clone the repo or download ZIP from Lovable
 2. Run `./setup.sh` for automated setup
 3. Open in Xcode: `npx cap open ios`
+4. Build and run (Cmd+R)
+
+The plugin is now part of the `src/` directory to ensure it's always included in ZIP exports.
 
 ## How can I deploy this project?
 

@@ -136,7 +136,7 @@ echo -e "${YELLOW}[8/8] Running verification...${NC}"
 VERIFICATION_PASSED=true
 
 # Check for plugin files
-if [ ! -f "plugins/audio-input-plugin/ios/Plugin/AudioInputPlugin.swift" ]; then
+if [ ! -f "src/native-plugins/audio-input-plugin/ios/Plugin/AudioInputPlugin.swift" ]; then
     echo -e "${RED}✗ Plugin file missing${NC}"
     VERIFICATION_PASSED=false
 else

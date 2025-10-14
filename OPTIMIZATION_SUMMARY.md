@@ -123,7 +123,7 @@ worker: {
 - Prevents 50+ MB of unnecessary files in git
 
 **Plugin Structure:**
-- Single source of truth in `plugins/audio-input-plugin/`
+- Single source of truth in `src/native-plugins/audio-input-plugin/`
 - Eliminated duplicate plugin files
 - Proper Podspec for automatic Xcode integration
 

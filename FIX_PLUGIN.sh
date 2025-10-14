@@ -66,12 +66,12 @@ echo ""
 # Step 4: Verify plugin files
 echo -e "${YELLOW}[4/6] Verifying plugin files...${NC}"
 
-if [ ! -f "plugins/audio-input-plugin/ios/Plugin/AudioInputPlugin.swift" ]; then
+if [ ! -f "src/native-plugins/audio-input-plugin/ios/Plugin/AudioInputPlugin.swift" ]; then
     echo -e "${RED}✗ Plugin Swift file missing!${NC}"
     exit 1
 fi
 
-if [ ! -f "plugins/audio-input-plugin/AudioInputPlugin.podspec" ]; then
+if [ ! -f "src/native-plugins/audio-input-plugin/AudioInputPlugin.podspec" ]; then
     echo -e "${RED}✗ Podspec missing!${NC}"
     exit 1
 fi

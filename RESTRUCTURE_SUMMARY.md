@@ -8,7 +8,7 @@ The AudioInputPlugin has been restructured from loose files into a proper Capaci
 
 ### 1. Created Plugin Package Structure
 ```
-plugins/audio-input-plugin/
+src/native-plugins/audio-input-plugin/
 ├── package.json              # Plugin metadata & Capacitor config
 ├── AudioInputPlugin.podspec  # iOS dependency management
 ├── README.md                 # Plugin documentation
@@ -119,5 +119,5 @@ If you encounter issues:
 
 See:
 - `PLUGIN_SETUP.md` for detailed setup instructions
-- `plugins/audio-input-plugin/README.md` for plugin API documentation
+- `src/native-plugins/audio-input-plugin/README.md` for plugin API documentation
 - Capacitor docs: https://capacitorjs.com/docs/plugins
