@@ -499,15 +499,21 @@ export function RecordingStudio() {
       }
 
       // Get audio stream (works on both web and native with Info.plist permission)
+      const audioConstraints: MediaTrackConstraints = {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+        sampleRate: 44100,
+        channelCount: 1,
+      };
+      
+      // Only add deviceId if we have a valid selected device
+      if (selectedDeviceId && selectedDeviceId.trim() !== '') {
+        audioConstraints.deviceId = { exact: selectedDeviceId };
+      }
+      
       const constraints: MediaStreamConstraints = { 
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-          sampleRate: 44100,
-          channelCount: 1,
-          ...(selectedDeviceId && { deviceId: { exact: selectedDeviceId } })
-        } 
+        audio: audioConstraints
       };
       
       const stream = await navigator.mediaDevices.getUserMedia(constraints);

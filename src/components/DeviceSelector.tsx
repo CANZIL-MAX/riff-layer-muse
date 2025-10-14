@@ -84,7 +84,8 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
     setIsLoading(true);
     try {
       if (!navigator.mediaDevices?.enumerateDevices) {
-        throw new Error('MediaDevices API not supported');
+        console.warn('MediaDevices API not supported on web, skipping');
+        return;
       }
 
       const allDevices = await navigator.mediaDevices.enumerateDevices();
@@ -97,11 +98,14 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
       }
     } catch (error) {
       console.error('Error enumerating devices:', error);
-      toast({
-        title: "Error",
-        description: "Could not access audio devices.",
-        variant: "destructive",
-      });
+      // Don't show error toast on native - it's expected to fail
+      if (!isNative) {
+        toast({
+          title: "Error",
+          description: "Could not access audio devices.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsLoading(false);
     }
