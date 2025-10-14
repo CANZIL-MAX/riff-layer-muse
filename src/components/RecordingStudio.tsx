@@ -98,7 +98,7 @@ export function RecordingStudio() {
   const [currentTime, setCurrentTime] = useState(0);
   const [masterVolume, setMasterVolume] = useState(1);
   const [recordingStartTime, setRecordingStartTime] = useState(0);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>(undefined);
   
   // Metronome and timing states
   const [bpm, setBpm] = useState(120);
