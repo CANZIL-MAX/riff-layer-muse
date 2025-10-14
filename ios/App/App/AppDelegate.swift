@@ -1,6 +1,5 @@
 import UIKit
 import Capacitor
-import AVFoundation
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -9,35 +8,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
-        
-        // Configure audio session for music recording app
-        do {
-            let audioSession = AVAudioSession.sharedInstance()
-            
-            // Set category to allow recording and playback simultaneously
-            try audioSession.setCategory(.playAndRecord, 
-                                       mode: .default, 
-                                       options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP])
-            
-            // Set preferred sample rate for better audio quality
-            try audioSession.setPreferredSampleRate(44100.0)
-            
-            // Set preferred buffer duration for lower latency (especially important for AirPods)
-            try audioSession.setPreferredIOBufferDuration(0.01) // 10ms buffer for low latency
-            
-            // Activate the audio session
-            try audioSession.setActive(true)
-            
-            print("✅ Audio session configured successfully for recording app")
-            print("📊 Sample rate: \(audioSession.sampleRate)")
-            print("📊 IO buffer duration: \(audioSession.ioBufferDuration)")
-            print("📊 Output latency: \(audioSession.outputLatency)")
-            print("📊 Input latency: \(audioSession.inputLatency)")
-            
-        } catch {
-            print("❌ Failed to configure audio session: \(error)")
-        }
-        
         return true
     }
 
@@ -48,7 +18,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func applicationDidEnterBackground(_ application: UIApplication) {
         // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later.
-        // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits the application.
+        // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
     }
 
     func applicationWillEnterForeground(_ application: UIApplication) {
@@ -57,15 +27,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func applicationDidBecomeActive(_ application: UIApplication) {
         // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
-        
-        // Reactivate audio session when app becomes active
-        do {
-            let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setActive(true)
-            print("✅ Audio session reactivated")
-        } catch {
-            print("❌ Failed to reactivate audio session: \(error)")
-        }
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
@@ -84,4 +45,5 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // tracking app url opens, make sure to keep this call
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
+
 }
