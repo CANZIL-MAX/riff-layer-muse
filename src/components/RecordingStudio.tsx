@@ -438,8 +438,8 @@ export function RecordingStudio() {
           const current = await AudioInput.getCurrentInput();
           
           if (current.device && current.device.isBluetooth) {
-            compensatedLatency = 0.210; // Fixed 210ms for AirPods/Bluetooth
-            console.log('🎯 Using AirPods latency compensation: 210ms');
+            compensatedLatency = 0.300; // Fixed 300ms for AirPods/Bluetooth
+            console.log('🎯 Using AirPods latency compensation: 300ms');
           } else {
             compensatedLatency = 0.020; // Built-in microphone: 20ms
             console.log('🎯 Using built-in mic latency compensation: 20ms');
@@ -453,8 +453,8 @@ export function RecordingStudio() {
         const deviceName = selectedDeviceId?.toLowerCase() || '';
         
         if (deviceName.includes('bluetooth')) {
-          compensatedLatency = 0.210; // Bluetooth: 210ms
-          console.log('🎯 Using Bluetooth latency compensation: 210ms');
+          compensatedLatency = 0.300; // Bluetooth: 300ms
+          console.log('🎯 Using Bluetooth latency compensation: 300ms');
         } else {
           compensatedLatency = 0.020; // Built-in: 20ms
           console.log('🎯 Using built-in latency compensation: 20ms');
