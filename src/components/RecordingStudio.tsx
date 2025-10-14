@@ -498,67 +498,56 @@ export function RecordingStudio() {
         }
       }
 
-      // Web platform: use getUserMedia and MediaRecorder
-      if (!isNative) {
-        const constraints: MediaStreamConstraints = { 
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-            sampleRate: 44100,
-            channelCount: 1,
-            ...(selectedDeviceId && { deviceId: { exact: selectedDeviceId } })
-          } 
-        };
-        
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        streamRef.current = stream;
+      // Get audio stream (works on both web and native with Info.plist permission)
+      const constraints: MediaStreamConstraints = { 
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          sampleRate: 44100,
+          channelCount: 1,
+          ...(selectedDeviceId && { deviceId: { exact: selectedDeviceId } })
+        } 
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
 
-        const options: MediaRecorderOptions = {};
-        
-        if (MediaRecorder.isTypeSupported('audio/mp4')) {
-          options.mimeType = 'audio/mp4';
-        } else if (MediaRecorder.isTypeSupported('audio/wav')) {
-          options.mimeType = 'audio/wav';
-        } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-          options.mimeType = 'audio/webm;codecs=opus';
-        }
-
-        const mediaRecorder = new MediaRecorder(stream, options);
-        mediaRecorderRef.current = mediaRecorder;
-        recordedChunksRef.current = [];
-
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            recordedChunksRef.current.push(event.data);
-          }
-        };
-
-        const actualStartTime = currentTime;
-        setRecordingStartTime(actualStartTime);
-        
-        console.log(`🎙️ MediaRecorder.start() called at: ${performance.now()}ms`);
-        console.log(`📍 Timeline position when recording starts: ${actualStartTime}s`);
-        
-        mediaRecorder.start(100);
-        setIsRecording(true);
-        
-        toast({
-          title: "Recording Started",
-          description: unmutedTracksCount > 0 
-            ? `Recording with ${unmutedTracksCount} track(s) playing`
-            : "Recording audio...",
-        });
-      } else {
-        // Native platform: permissions handled via Info.plist, no getUserMedia needed
-        setIsRecording(true);
-        setRecordingStartTime(currentTime);
-        
-        toast({
-          title: "Recording Started", 
-          description: "Native recording active",
-        });
+      const options: MediaRecorderOptions = {};
+      
+      if (MediaRecorder.isTypeSupported('audio/mp4')) {
+        options.mimeType = 'audio/mp4';
+      } else if (MediaRecorder.isTypeSupported('audio/wav')) {
+        options.mimeType = 'audio/wav';
+      } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        options.mimeType = 'audio/webm;codecs=opus';
       }
+
+      const mediaRecorder = new MediaRecorder(stream, options);
+      mediaRecorderRef.current = mediaRecorder;
+      recordedChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+
+      const actualStartTime = currentTime;
+      setRecordingStartTime(actualStartTime);
+      
+      console.log(`🎙️ MediaRecorder.start() called at: ${performance.now()}ms`);
+      console.log(`📍 Timeline position when recording starts: ${actualStartTime}s`);
+      
+      mediaRecorder.start(100);
+      setIsRecording(true);
+      
+      toast({
+        title: "Recording Started",
+        description: unmutedTracksCount > 0 
+          ? `Recording with ${unmutedTracksCount} track(s) playing`
+          : "Recording audio...",
+      });
     } catch (error) {
       console.error('Error starting recording:', error);
       toast({
