@@ -482,23 +482,6 @@ export function RecordingStudio() {
         totalCompensation: compensatedLatency
       });
 
-      // Get user media with selected device and optimized settings for iOS
-      // Use specific settings to prevent audio ducking during recording
-      const constraints: MediaStreamConstraints = { 
-        audio: {
-          echoCancellation: false, // Disable to prevent ducking
-          noiseSuppression: false, // Disable to prevent ducking
-          autoGainControl: false, // Critical: disable AGC to prevent volume ducking
-          sampleRate: 44100,
-          channelCount: 1, // Mono for better performance
-          ...(selectedDeviceId && { deviceId: { exact: selectedDeviceId } })
-        } 
-      };
-      
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      
-      streamRef.current = stream;
-
       let unmutedTracksCount = 0;
 
       // Start metronome if enabled
@@ -510,51 +493,72 @@ export function RecordingStudio() {
       if (withPlayback) {
         unmutedTracksCount = playableTracks.length;
         if (playableTracks.length > 0) {
-          // Play at full volume, no ducking during recording
           await PlaybackEngine.playTracks(playableTracks, currentTime);
           setIsPlaying(true);
         }
       }
 
-      // Create MediaRecorder with proper options for iOS
-      const options: MediaRecorderOptions = {};
-      
-      // Prefer MP4 for iOS/iPhone, then fallback to other formats
-      if (MediaRecorder.isTypeSupported('audio/mp4')) {
-        options.mimeType = 'audio/mp4';
-      } else if (MediaRecorder.isTypeSupported('audio/wav')) {
-        options.mimeType = 'audio/wav';
-      } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-        options.mimeType = 'audio/webm;codecs=opus';
-      }
+      // Web platform: use getUserMedia and MediaRecorder
+      if (!isNative) {
+        const constraints: MediaStreamConstraints = { 
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+            sampleRate: 44100,
+            channelCount: 1,
+            ...(selectedDeviceId && { deviceId: { exact: selectedDeviceId } })
+          } 
+        };
+        
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        streamRef.current = stream;
 
-      const mediaRecorder = new MediaRecorder(stream, options);
-      mediaRecorderRef.current = mediaRecorder;
-      recordedChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          recordedChunksRef.current.push(event.data);
+        const options: MediaRecorderOptions = {};
+        
+        if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          options.mimeType = 'audio/mp4';
+        } else if (MediaRecorder.isTypeSupported('audio/wav')) {
+          options.mimeType = 'audio/wav';
+        } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          options.mimeType = 'audio/webm;codecs=opus';
         }
-      };
 
-      // Set recording start time RIGHT BEFORE starting the recorder
-      const actualStartTime = currentTime;
-      setRecordingStartTime(actualStartTime);
-      
-      const recordingStartTimestamp = performance.now();
-      console.log(`🎙️ MediaRecorder.start() called at: ${recordingStartTimestamp}ms`);
-      console.log(`📍 Timeline position when recording starts: ${actualStartTime}s`);
-      
-      mediaRecorder.start(100); // Collect data every 100ms for better quality
-      setIsRecording(true);
-      
-      toast({
-        title: "Recording Started",
-        description: unmutedTracksCount > 0 
-          ? `Recording with ${unmutedTracksCount} track(s) playing`
-          : "Recording audio...",
-      });
+        const mediaRecorder = new MediaRecorder(stream, options);
+        mediaRecorderRef.current = mediaRecorder;
+        recordedChunksRef.current = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            recordedChunksRef.current.push(event.data);
+          }
+        };
+
+        const actualStartTime = currentTime;
+        setRecordingStartTime(actualStartTime);
+        
+        console.log(`🎙️ MediaRecorder.start() called at: ${performance.now()}ms`);
+        console.log(`📍 Timeline position when recording starts: ${actualStartTime}s`);
+        
+        mediaRecorder.start(100);
+        setIsRecording(true);
+        
+        toast({
+          title: "Recording Started",
+          description: unmutedTracksCount > 0 
+            ? `Recording with ${unmutedTracksCount} track(s) playing`
+            : "Recording audio...",
+        });
+      } else {
+        // Native platform: permissions handled via Info.plist, no getUserMedia needed
+        setIsRecording(true);
+        setRecordingStartTime(currentTime);
+        
+        toast({
+          title: "Recording Started", 
+          description: "Native recording active",
+        });
+      }
     } catch (error) {
       console.error('Error starting recording:', error);
       toast({
