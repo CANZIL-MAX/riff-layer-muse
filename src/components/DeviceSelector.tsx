@@ -195,9 +195,7 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
               <SelectContent>
                 {nativeDevices.map((device) => (
                   <SelectItem key={device.portUID} value={device.portUID}>
-                    <span className="flex items-center gap-2">
-                      {device.isBluetooth ? '🎧' : '📱'} {device.portName}
-                    </span>
+                    {device.isBluetooth ? '🎧' : '📱'} {device.portName}
                   </SelectItem>
                 ))}
               </SelectContent>
