@@ -430,57 +430,39 @@ export function RecordingStudio() {
         await MetronomeEngine.playCountIn(1);
       }
       
-      // Enhanced latency detection and compensation
-      const audioContext = audioContextRef.current || new AudioContext();
-      const baseLatency = audioContext.baseLatency || 0;
-      const outputLatency = (audioContext as any).outputLatency || 0;
-      
-      // Detect device-specific latency
-      let deviceLatency = 0;
-      
-      // Check audio input for native platforms
+      // Simplified latency compensation with fixed values
+      let compensatedLatency = 0;
+
       if (isNative) {
         try {
           const current = await AudioInput.getCurrentInput();
           
           if (current.device && current.device.isBluetooth) {
-            deviceLatency = 0.15; // Bluetooth devices (AirPods, etc.)
+            compensatedLatency = 0.210; // Fixed 210ms for AirPods/Bluetooth
+            console.log('🎯 Using AirPods latency compensation: 210ms');
           } else {
-            deviceLatency = 0.02; // Built-in microphone
+            compensatedLatency = 0.020; // Built-in microphone: 20ms
+            console.log('🎯 Using built-in mic latency compensation: 20ms');
           }
         } catch (error) {
           console.warn('Could not detect device type for latency:', error);
-          deviceLatency = 0.02; // Default to built-in mic latency
+          compensatedLatency = 0.020; // Default to built-in mic
         }
       } else {
         // Web platform - check device name
         const deviceName = selectedDeviceId?.toLowerCase() || '';
         
         if (deviceName.includes('bluetooth')) {
-          deviceLatency = 0.15; // Bluetooth devices
-        } else if (deviceName.includes('usb') || deviceName.includes('interface')) {
-          deviceLatency = 0.005; // USB audio interface
+          compensatedLatency = 0.210; // Bluetooth: 210ms
+          console.log('🎯 Using Bluetooth latency compensation: 210ms');
         } else {
-          deviceLatency = 0.02; // Built-in microphone
+          compensatedLatency = 0.020; // Built-in: 20ms
+          console.log('🎯 Using built-in latency compensation: 20ms');
         }
       }
-      
-      // Calculate total latency with buffer analysis compensation
-      const totalSystemLatency = baseLatency + outputLatency + deviceLatency;
-      
-      // Add processing buffer compensation (iOS Safari specific)
-      const processingBufferLatency = 0.02;
-      const compensatedLatency = totalSystemLatency + processingBufferLatency;
-      
+
       setLatencyCompensation(compensatedLatency);
-      
-      console.log('🎯 Advanced latency compensation:', {
-        baseLatency,
-        outputLatency, 
-        deviceLatency,
-        processingBufferLatency,
-        totalCompensation: compensatedLatency
-      });
+      console.log('🎯 Final latency compensation:', compensatedLatency * 1000, 'ms');
 
       let unmutedTracksCount = 0;
 
