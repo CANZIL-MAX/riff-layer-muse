@@ -134,31 +134,31 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
       return () => {
         listener.then(l => AudioInput.removeAllListeners());
       };
-    }
-    
-    // WEB ONLY - use MediaDevices API
-    console.log('🌐 [WEB] Initializing web audio device handling');
-    enumerateDevices();
-    
-    const handleDeviceChange = () => {
-      console.log('🌐 [WEB] Device change detected');
+    } else {
+      // WEB ONLY - use MediaDevices API
+      console.log('🌐 [WEB] Initializing web audio device handling');
       enumerateDevices();
-    };
-    
-    if (navigator.mediaDevices?.addEventListener) {
-      console.log('🌐 [WEB] Using addEventListener for device changes');
-      navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
       
-      return () => {
-        navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+      const handleDeviceChange = () => {
+        console.log('🌐 [WEB] Device change detected');
+        enumerateDevices();
       };
-    } else if (navigator.mediaDevices && 'ondevicechange' in navigator.mediaDevices) {
-      console.log('🌐 [WEB] Using ondevicechange for device changes');
-      navigator.mediaDevices.ondevicechange = handleDeviceChange;
       
-      return () => {
-        navigator.mediaDevices.ondevicechange = null;
-      };
+      if (navigator.mediaDevices?.addEventListener) {
+        console.log('🌐 [WEB] Using addEventListener for device changes');
+        navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+        
+        return () => {
+          navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+        };
+      } else if (navigator.mediaDevices && 'ondevicechange' in navigator.mediaDevices) {
+        console.log('🌐 [WEB] Using ondevicechange for device changes');
+        navigator.mediaDevices.ondevicechange = handleDeviceChange;
+        
+        return () => {
+          navigator.mediaDevices.ondevicechange = null;
+        };
+      }
     }
   }, [isNative]);
 
