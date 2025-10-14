@@ -112,10 +112,10 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
   };
 
   useEffect(() => {
-    enumerateDevices();
-    
-    // Listen for native device changes
+    // Only use native device handling on native platforms
     if (isNative) {
+      fetchNativeDevices();
+      
       const listener = AudioInput.addListener('audioRouteChanged', async (event) => {
         console.log('🎧 Audio route changed:', event.reason);
         await fetchNativeDevices();
@@ -135,34 +135,28 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
       };
     }
     
-    // Listen for device changes on web
+    // Only use web device handling on web platforms
+    enumerateDevices();
+    
     const handleDeviceChange = () => {
       enumerateDevices();
     };
     
-    let cleanup: (() => void) | null = null;
-    
-    if (navigator.mediaDevices && !isNative) {
-      if (navigator.mediaDevices.addEventListener) {
-        console.log('Using addEventListener for device changes');
-        navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
-        cleanup = () => {
-          navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
-        };
-      } else if ('ondevicechange' in navigator.mediaDevices) {
-        console.log('Using ondevicechange for device changes');
-        navigator.mediaDevices.ondevicechange = handleDeviceChange;
-        cleanup = () => {
-          navigator.mediaDevices.ondevicechange = null;
-        };
-      }
+    if (navigator.mediaDevices?.addEventListener) {
+      console.log('Using addEventListener for device changes');
+      navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+      
+      return () => {
+        navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+      };
+    } else if (navigator.mediaDevices && 'ondevicechange' in navigator.mediaDevices) {
+      console.log('Using ondevicechange for device changes');
+      navigator.mediaDevices.ondevicechange = handleDeviceChange;
+      
+      return () => {
+        navigator.mediaDevices.ondevicechange = null;
+      };
     }
-    
-    return () => {
-      if (cleanup) {
-        cleanup();
-      }
-    };
   }, [isNative]);
 
   const selectedDevice = devices.find(device => device.deviceId === selectedDeviceId);
@@ -181,7 +175,7 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
         <CardContent className="space-y-3">
           <div className="flex items-center gap-2">
             <Select 
-              value={selectedDeviceId || nativeDevices[0]?.portUID}
+              value={selectedDeviceId || nativeDevices[0]?.portUID || ''}
               onValueChange={handleNativeDeviceChange}
               disabled={isLoading || nativeDevices.length === 0}
             >
@@ -195,6 +189,9 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
                 } />
               </SelectTrigger>
               <SelectContent>
+                {nativeDevices.length === 0 && (
+                  <SelectItem value="" disabled>No devices available</SelectItem>
+                )}
                 {nativeDevices.map((device) => (
                   <SelectItem key={device.portUID} value={device.portUID}>
                     {device.isBluetooth ? '🎧' : '📱'} {device.portName}
@@ -237,7 +234,7 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
       <CardContent className="space-y-3">
         <div className="flex items-center gap-2">
             <Select 
-              value={selectedDeviceId || devices[0]?.deviceId}
+              value={selectedDeviceId || devices[0]?.deviceId || ''}
               onValueChange={onDeviceChange}
               disabled={isLoading || devices.length === 0}
             >
@@ -251,6 +248,9 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
               } />
             </SelectTrigger>
             <SelectContent>
+              {devices.length === 0 && (
+                <SelectItem value="" disabled>No microphones available</SelectItem>
+              )}
               {devices.map((device) => (
                 <SelectItem key={device.deviceId} value={device.deviceId}>
                   {device.label || `Microphone ${device.deviceId.slice(0, 8)}`}
