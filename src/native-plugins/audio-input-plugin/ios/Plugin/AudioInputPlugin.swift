@@ -12,6 +12,8 @@ public class AudioInputPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "setPreferredInput", returnType: CAPPluginReturnPromise)
     ]
     
+    private var isSessionConfigured = false
+    
     public override func load() {
         NotificationCenter.default.addObserver(
             self,
@@ -19,57 +21,64 @@ public class AudioInputPlugin: CAPPlugin, CAPBridgedPlugin {
             name: AVAudioSession.routeChangeNotification,
             object: nil
         )
+        
+        // Configure session once on load
+        configureAudioSession()
+    }
+    
+    private func configureAudioSession() {
+        guard !isSessionConfigured else { return }
+        
+        let session = AVAudioSession.sharedInstance()
+        do {
+            // Configure for recording with playback, allow Bluetooth
+            try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetooth, .defaultToSpeaker])
+            try session.setActive(true, options: [])
+            isSessionConfigured = true
+            print("✅ AudioInputPlugin: Audio session configured successfully")
+        } catch {
+            print("❌ AudioInputPlugin: Failed to configure audio session: \(error.localizedDescription)")
+        }
     }
     
     @objc func getAvailableInputs(_ call: CAPPluginCall) {
         let session = AVAudioSession.sharedInstance()
         
-        do {
-            try session.setCategory(.playAndRecord, mode: .default, options: [])
-            try session.setActive(true)
-            
-            guard let availableInputs = session.availableInputs else {
-                call.resolve(["devices": []])
-                return
-            }
-            
-            let devices = availableInputs.map { input in
-                return [
-                    "portUID": input.uid,
-                    "portName": input.portName,
-                    "portType": input.portType.rawValue,
-                    "isBluetooth": input.portType == .bluetoothHFP || input.portType == .bluetoothA2DP || input.portType == .bluetoothLE
-                ]
-            }
-            
-            call.resolve(["devices": devices])
-        } catch {
-            call.reject("Failed to get available inputs: \(error.localizedDescription)")
+        // Don't reactivate - session is already configured
+        guard let availableInputs = session.availableInputs else {
+            call.resolve(["devices": []])
+            return
         }
+        
+        let devices = availableInputs.map { input in
+            return [
+                "portUID": input.uid,
+                "portName": input.portName,
+                "portType": input.portType.rawValue,
+                "isBluetooth": input.portType == .bluetoothHFP || input.portType == .bluetoothA2DP || input.portType == .bluetoothLE
+            ]
+        }
+        
+        call.resolve(["devices": devices])
     }
     
     @objc func getCurrentInput(_ call: CAPPluginCall) {
         let session = AVAudioSession.sharedInstance()
         
-        do {
-            try session.setActive(true)
-            
-            guard let currentInput = session.currentRoute.inputs.first else {
-                call.resolve(["device": NSNull()])
-                return
-            }
-            
-            let device = [
-                "portUID": currentInput.uid,
-                "portName": currentInput.portName,
-                "portType": currentInput.portType.rawValue,
-                "isBluetooth": currentInput.portType == .bluetoothHFP || currentInput.portType == .bluetoothA2DP || currentInput.portType == .bluetoothLE
-            ]
-            
-            call.resolve(["device": device])
-        } catch {
-            call.reject("Failed to get current input: \(error.localizedDescription)")
+        // Don't reactivate - session is already configured
+        guard let currentInput = session.currentRoute.inputs.first else {
+            call.resolve(["device": NSNull()])
+            return
         }
+        
+        let device = [
+            "portUID": currentInput.uid,
+            "portName": currentInput.portName,
+            "portType": currentInput.portType.rawValue,
+            "isBluetooth": currentInput.portType == .bluetoothHFP || currentInput.portType == .bluetoothA2DP || currentInput.portType == .bluetoothLE
+        ]
+        
+        call.resolve(["device": device])
     }
     
     @objc func setPreferredInput(_ call: CAPPluginCall) {
