@@ -112,8 +112,9 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
   };
 
   useEffect(() => {
-    // Only use native device handling on native platforms
+    // NATIVE ONLY - use AudioInputPlugin
     if (isNative) {
+      console.log('🎧 [NATIVE] Initializing native audio device handling');
       fetchNativeDevices();
       
       const listener = AudioInput.addListener('audioRouteChanged', async (event) => {
@@ -135,22 +136,24 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
       };
     }
     
-    // Only use web device handling on web platforms
+    // WEB ONLY - use MediaDevices API
+    console.log('🌐 [WEB] Initializing web audio device handling');
     enumerateDevices();
     
     const handleDeviceChange = () => {
+      console.log('🌐 [WEB] Device change detected');
       enumerateDevices();
     };
     
     if (navigator.mediaDevices?.addEventListener) {
-      console.log('Using addEventListener for device changes');
+      console.log('🌐 [WEB] Using addEventListener for device changes');
       navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
       
       return () => {
         navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
       };
     } else if (navigator.mediaDevices && 'ondevicechange' in navigator.mediaDevices) {
-      console.log('Using ondevicechange for device changes');
+      console.log('🌐 [WEB] Using ondevicechange for device changes');
       navigator.mediaDevices.ondevicechange = handleDeviceChange;
       
       return () => {
@@ -164,6 +167,9 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
 
   // Render native iOS interface
   if (isNative) {
+    // Calculate the select value properly to avoid controlled/uncontrolled switching
+    const selectValue = selectedDeviceId || (nativeDevices.length > 0 ? nativeDevices[0].portUID : undefined);
+    
     return (
       <Card className="bg-card border-border">
         <CardHeader className="pb-3">
@@ -174,31 +180,28 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center gap-2">
-            <Select 
-              value={selectedDeviceId || nativeDevices[0]?.portUID || ''}
-              onValueChange={handleNativeDeviceChange}
-              disabled={isLoading || nativeDevices.length === 0}
-            >
-              <SelectTrigger className="flex-1">
-                <SelectValue placeholder={
-                  isLoading 
-                    ? "Loading devices..." 
-                    : nativeDevices.length === 0 
-                      ? "No devices found" 
-                      : "Select input device"
-                } />
-              </SelectTrigger>
-              <SelectContent>
-                {nativeDevices.length === 0 && (
-                  <SelectItem value="" disabled>No devices available</SelectItem>
-                )}
-                {nativeDevices.map((device) => (
-                  <SelectItem key={device.portUID} value={device.portUID}>
-                    {device.isBluetooth ? '🎧' : '📱'} {device.portName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {nativeDevices.length > 0 ? (
+              <Select 
+                value={selectValue}
+                onValueChange={handleNativeDeviceChange}
+                disabled={isLoading}
+              >
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Select input device" />
+                </SelectTrigger>
+                <SelectContent>
+                  {nativeDevices.map((device) => (
+                    <SelectItem key={device.portUID} value={device.portUID}>
+                      {device.isBluetooth ? '🎧' : '📱'} {device.portName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="flex-1 px-3 py-2 text-sm text-muted-foreground border border-input rounded-md bg-muted">
+                {isLoading ? 'Loading devices...' : 'No devices found'}
+              </div>
+            )}
             
             <Button
               variant="outline"
@@ -223,6 +226,8 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
   }
 
   // Render web interface
+  const webSelectValue = selectedDeviceId || (devices.length > 0 ? devices[0].deviceId : undefined);
+  
   return (
     <Card className="bg-card border-border">
       <CardHeader className="pb-3">
@@ -233,31 +238,28 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex items-center gap-2">
+          {devices.length > 0 ? (
             <Select 
-              value={selectedDeviceId || devices[0]?.deviceId || ''}
+              value={webSelectValue}
               onValueChange={onDeviceChange}
-              disabled={isLoading || devices.length === 0}
+              disabled={isLoading}
             >
-            <SelectTrigger className="flex-1">
-              <SelectValue placeholder={
-                isLoading 
-                  ? "Loading devices..." 
-                  : devices.length === 0 
-                    ? "No microphones found" 
-                    : "Select microphone"
-              } />
-            </SelectTrigger>
-            <SelectContent>
-              {devices.length === 0 && (
-                <SelectItem value="" disabled>No microphones available</SelectItem>
-              )}
-              {devices.map((device) => (
-                <SelectItem key={device.deviceId} value={device.deviceId}>
-                  {device.label || `Microphone ${device.deviceId.slice(0, 8)}`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Select microphone" />
+              </SelectTrigger>
+              <SelectContent>
+                {devices.map((device) => (
+                  <SelectItem key={device.deviceId} value={device.deviceId}>
+                    {device.label || `Microphone ${device.deviceId.slice(0, 8)}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <div className="flex-1 px-3 py-2 text-sm text-muted-foreground border border-input rounded-md bg-muted">
+              {isLoading ? 'Loading devices...' : 'No microphones found'}
+            </div>
+          )}
           
           <Button
             variant="outline"
