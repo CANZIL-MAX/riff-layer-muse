@@ -31,33 +31,25 @@ public class AudioInputPlugin: CAPPlugin, CAPBridgedPlugin {
         
         let session = AVAudioSession.sharedInstance()
         do {
-            // Configure for recording with playback, allow Bluetooth
-            try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetooth, .defaultToSpeaker])
+            // Configure for recording with playback
+            // allowBluetoothA2DP: Bluetooth for OUTPUT only (AirPods speakers for monitoring)
+            // This prevents iOS from routing INPUT to Bluetooth microphone
+            // The iPhone's built-in mic will always be used for recording
+            try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothA2DP, .defaultToSpeaker])
             
-            // Force built-in microphone as input when AirPods/Bluetooth are connected
-            // This ensures audio output goes to AirPods but input comes from iPhone mic
-            if let availableInputs = session.availableInputs {
-                // Check if Bluetooth headphones are connected
-                let hasBluetoothOutput = session.currentRoute.outputs.contains { output in
-                    output.portType == .bluetoothA2DP || output.portType == .bluetoothHFP || output.portType == .bluetoothLE
-                }
-                
-                if hasBluetoothOutput {
-                    // Find and set built-in microphone as preferred input
-                    if let builtInMic = availableInputs.first(where: { $0.portType == .builtInMic }) {
-                        try session.setPreferredInput(builtInMic)
-                        print("🎤 Forced built-in microphone as input (AirPods/Bluetooth detected for output)")
-                    } else {
-                        print("⚠️ Built-in microphone not found, using default input")
-                    }
-                } else {
-                    print("🎤 Using default input routing (no Bluetooth output detected)")
-                }
+            // Always prefer built-in microphone for input
+            // This ensures high-quality recording even when AirPods are connected
+            if let availableInputs = session.availableInputs,
+               let builtInMic = availableInputs.first(where: { $0.portType == .builtInMic }) {
+                try session.setPreferredInput(builtInMic)
+                print("🎤 Built-in microphone set as preferred input (iPhone mic always used)")
+            } else {
+                print("⚠️ Built-in microphone not found in available inputs")
             }
             
             try session.setActive(true, options: [])
             isSessionConfigured = true
-            print("✅ AudioInputPlugin: Audio session configured successfully")
+            print("✅ AudioInputPlugin: Audio session configured (Bluetooth A2DP for output, iPhone mic for input)")
         } catch {
             print("❌ AudioInputPlugin: Failed to configure audio session: \(error.localizedDescription)")
         }
