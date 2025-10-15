@@ -100,8 +100,10 @@ export function WaveformBlock({
 
   // Native iOS touch handling - proper gesture detection with movement threshold
   const handleTouchStart = (e: React.TouchEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); // Prevent iOS default behavior
+    // ✅ REMOVED stopPropagation - parent TimelinePanZoom now respects our touch events
+    
+    console.log('🎵 WaveformBlock handling touch start on:', track.name);
     
     const touch = e.touches[0];
     const now = Date.now();
@@ -219,7 +221,7 @@ export function WaveformBlock({
   // Nudge functions for precise timing adjustments
   const handleNudgeLeft = (e: React.TouchEvent) => {
     e.preventDefault();
-    e.stopPropagation();
+    // ✅ Removed stopPropagation
     
     const nudgeAmount = 0.050; // 50ms
     const newStartTime = Math.max(0, (track.startTime || 0) - nudgeAmount);
@@ -234,7 +236,7 @@ export function WaveformBlock({
 
   const handleNudgeRight = (e: React.TouchEvent) => {
     e.preventDefault();
-    e.stopPropagation();
+    // ✅ Removed stopPropagation
     
     const nudgeAmount = 0.050; // 50ms
     const newStartTime = (track.startTime || 0) + nudgeAmount;
@@ -250,7 +252,9 @@ export function WaveformBlock({
   // Native touch handlers for trim operations
   const handleTrimTouchStart = (e: React.TouchEvent, side: 'start' | 'end') => {
     e.preventDefault();
-    e.stopPropagation();
+    // ✅ Removed stopPropagation
+    
+    console.log(`✂️ WaveformBlock trim ${side} touch start`);
     
     const touch = e.touches[0];
     const timelineRect = blockRef.current?.closest('[data-timeline]')?.getBoundingClientRect();

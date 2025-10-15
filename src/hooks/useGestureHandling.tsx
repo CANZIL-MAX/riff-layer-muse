@@ -26,14 +26,26 @@ export function useGestureHandling({ onPan, onZoom, isEnabled = true }: GestureH
   const handleTouchStart = useCallback((e: TouchEvent) => {
     if (!isEnabled) return;
 
+    const target = e.target as HTMLElement;
+    const isOnWaveformBlock = target.closest('[data-waveform-block]');
+    
+    // 🎯 Smart event delegation: Single finger on waveform block? Let block handle it
+    if (e.touches.length === 1 && isOnWaveformBlock) {
+      console.log('🎯 Touch on waveform block, letting block handle it');
+      return; // Don't preventDefault, don't handle - let WaveformBlock take control
+    }
+    
+    console.log('🌐 Timeline handling touch:', e.touches.length, 'fingers', isOnWaveformBlock ? 'on block' : 'on timeline');
+
     if (e.touches.length === 1) {
-      // Single finger - prepare for pan
+      // Single finger on empty timeline - prepare for pan
       lastTouchRef.current = {
         x: e.touches[0].clientX,
         y: e.touches[0].clientY
       };
     } else if (e.touches.length === 2 && onZoom) {
-      // Two fingers - prepare for pinch zoom
+      // Two fingers anywhere - always handle pinch zoom
+      e.preventDefault(); // Prevent iOS zoom
       const distance = getTouchDistance(e.touches[0], e.touches[1]);
       const center = getTouchCenter(e.touches[0], e.touches[1]);
       
@@ -50,7 +62,8 @@ export function useGestureHandling({ onPan, onZoom, isEnabled = true }: GestureH
     if (!isEnabled || !lastTouchRef.current) return;
 
     if (e.touches.length === 1) {
-      // Single finger pan
+      // Single finger pan (only on timeline, not on blocks)
+      e.preventDefault(); // Prevent iOS scroll
       const deltaX = e.touches[0].clientX - lastTouchRef.current.x;
       const deltaY = e.touches[0].clientY - lastTouchRef.current.y;
       
@@ -61,7 +74,8 @@ export function useGestureHandling({ onPan, onZoom, isEnabled = true }: GestureH
         y: e.touches[0].clientY
       };
     } else if (e.touches.length === 2 && onZoom && lastTouchRef.current.distance) {
-      // Two finger zoom
+      // Two finger zoom - always handle
+      e.preventDefault(); // Prevent iOS zoom
       const currentDistance = getTouchDistance(e.touches[0], e.touches[1]);
       const center = getTouchCenter(e.touches[0], e.touches[1]);
       
