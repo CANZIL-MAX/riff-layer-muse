@@ -148,6 +148,13 @@ export function WaveformBlock({
       console.log('🎯 Movement threshold exceeded, starting drag');
       
       const timelineRect = blockRef.current?.closest('[data-timeline]')?.getBoundingClientRect();
+      
+      // ✅ Validation: Ensure we have valid geometry
+      if (!timelineRect) {
+        console.error('❌ Timeline rect not found - cannot drag');
+        return;
+      }
+      
       const startX = touchStartRef.current.x - touchStartRef.current.timelineLeft + scrollOffset;
       const initialStartTime = track.startTime || 0;
       
@@ -157,9 +164,15 @@ export function WaveformBlock({
       const handleDragMove = (moveEvent: TouchEvent) => {
         moveEvent.preventDefault();
         const currentTouch = moveEvent.touches[0];
-        const currentX = currentTouch.clientX - (timelineRect?.left || 0) + scrollOffset;
+        const currentX = currentTouch.clientX - timelineRect.left + scrollOffset;
         const deltaX = currentX - startX;
         const deltaTime = pixelsToTime(deltaX);
+        
+        // ✅ Validation: Check for NaN
+        if (isNaN(deltaTime) || deltaTime === null || deltaTime === undefined) {
+          console.error('❌ Invalid deltaTime in drag:', { deltaX, deltaTime });
+          return;
+        }
         
         let newStartTime = Math.max(0, initialStartTime + deltaTime);
         
@@ -174,10 +187,12 @@ export function WaveformBlock({
       };
       
       const handleDragEnd = () => {
-        if (localStartTime !== null) {
+        if (localStartTime !== null && !isNaN(localStartTime)) {
           console.log('🎯 Applying final startTime update:', localStartTime);
           onTrackUpdate(track.id, { startTime: localStartTime });
           setLocalStartTime(null);
+        } else {
+          console.error('❌ Invalid localStartTime - not updating:', localStartTime);
         }
         setIsDragging(false);
         setShowSnapIndicator(false);
@@ -249,16 +264,28 @@ export function WaveformBlock({
     }
   };
 
-  // Native touch handlers for trim operations
+  // Native touch handlers for trim operations - REWRITTEN for event isolation and waveform alignment
   const handleTrimTouchStart = (e: React.TouchEvent, side: 'start' | 'end') => {
     e.preventDefault();
-    // ✅ Removed stopPropagation
+    e.stopPropagation(); // ✅ CRITICAL: Prevent parent block's handleTouchStart from firing
     
-    console.log(`✂️ WaveformBlock trim ${side} touch start`);
+    console.log(`✂️ TRIM HANDLE TOUCHED:`, { 
+      side, 
+      initialTrimStart: track.trimStart || 0,
+      initialTrimEnd: track.trimEnd || track.duration,
+      initialStartTime: track.startTime || 0 
+    });
     
     const touch = e.touches[0];
     const timelineRect = blockRef.current?.closest('[data-timeline]')?.getBoundingClientRect();
-    const startX = touch.clientX - (timelineRect?.left || 0) + scrollOffset;
+    
+    // Validation: Ensure we have valid geometry
+    if (!timelineRect) {
+      console.error('❌ Timeline rect not found - cannot trim');
+      return;
+    }
+    
+    const startX = touch.clientX - timelineRect.left + scrollOffset;
     
     setIsResizing(side);
     setShowSnapIndicator(true);
@@ -268,46 +295,96 @@ export function WaveformBlock({
       navigator.vibrate(10);
     }
     
-    const initialTrimStart = track.trimStart || 0;
-    const initialTrimEnd = track.trimEnd || track.duration;
-    const initialStartTime = track.startTime || 0;
+    // ✅ Use CLOSURE VARIABLES instead of React state for immediate value tracking
+    let currentTrimStart = track.trimStart || 0;
+    let currentTrimEnd = track.trimEnd || track.duration;
+    let currentStartTime = track.startTime || 0;
+    const duration = track.duration;
     
     const handleMove = (moveEvent: TouchEvent) => {
       moveEvent.preventDefault();
       const currentTouch = moveEvent.touches[0];
-      const currentX = currentTouch.clientX - (timelineRect?.left || 0) + scrollOffset;
+      const currentX = currentTouch.clientX - timelineRect.left + scrollOffset;
       const deltaX = currentX - startX;
       const deltaTime = pixelsToTime(deltaX);
       
+      // Validation: Check for NaN
+      if (isNaN(deltaTime) || deltaTime === null || deltaTime === undefined) {
+        console.error('❌ Invalid deltaTime:', { deltaX, deltaTime });
+        return;
+      }
+      
       if (side === 'start') {
-        // Trimming from the start: adjust both trimStart and startTime
-        const newTrimStart = Math.max(0, Math.min(initialTrimStart + deltaTime, initialTrimEnd - 0.1));
-        const trimDelta = newTrimStart - initialTrimStart;
+        // ✅ LEFT HANDLE: Trim from start - adjust BOTH trimStart and startTime to keep waveform anchored
+        const newTrimStart = Math.max(0, Math.min(currentTrimStart + deltaTime, currentTrimEnd - 0.1));
+        const trimChange = newTrimStart - (track.trimStart || 0);
+        
+        // CRITICAL: Move startTime by same amount to keep visible waveform in place
+        const newStartTime = (track.startTime || 0) + trimChange;
+        
+        currentTrimStart = newTrimStart;
+        currentStartTime = newStartTime;
+        
+        // Update local state for visual preview
         setLocalTrimStart(newTrimStart);
-        setLocalStartTime(initialStartTime + trimDelta);
+        setLocalStartTime(newStartTime);
+        
+        console.log('✂️ TRIM START MOVE:', {
+          deltaX,
+          deltaTime,
+          trimChange,
+          newTrimStart,
+          newStartTime,
+          visuallyStaysAtPixel: timeToPixels(newStartTime)
+        });
       } else {
-        // Trimming from the end: only adjust trimEnd
-        const newTrimEnd = Math.max(initialTrimStart + 0.1, Math.min(initialTrimEnd + deltaTime, track.duration));
+        // ✅ RIGHT HANDLE: Trim from end - only adjust trimEnd, startTime unchanged
+        const newTrimEnd = Math.max(currentTrimStart + 0.1, Math.min(currentTrimEnd + deltaTime, duration));
+        
+        currentTrimEnd = newTrimEnd;
+        
+        // Update local state for visual preview
         setLocalTrimEnd(newTrimEnd);
+        
+        console.log('✂️ TRIM END MOVE:', {
+          deltaX,
+          deltaTime,
+          newTrimEnd,
+          startTimeUnchanged: currentStartTime
+        });
       }
     };
     
     const handleEnd = () => {
-      // Apply final updates
-      if (side === 'start' && localTrimStart !== null && localStartTime !== null) {
-        console.log('✂️ Applying final trimStart + startTime update:', { 
-          trimStart: localTrimStart, 
-          startTime: localStartTime 
+      // ✅ Apply final updates using closure variables (always up-to-date)
+      if (side === 'start') {
+        console.log('✂️ TRIM START END:', { 
+          finalTrimStart: currentTrimStart, 
+          finalStartTime: currentStartTime 
         });
-        onTrackUpdate(track.id, { 
-          trimStart: localTrimStart,
-          startTime: localStartTime 
-        });
+        
+        // Validation: Ensure values are valid before updating
+        if (isNaN(currentTrimStart) || isNaN(currentStartTime)) {
+          console.error('❌ Invalid trim values - not updating:', { currentTrimStart, currentStartTime });
+        } else {
+          onTrackUpdate(track.id, { 
+            trimStart: currentTrimStart,
+            startTime: currentStartTime 
+          });
+        }
+        
         setLocalTrimStart(null);
         setLocalStartTime(null);
-      } else if (side === 'end' && localTrimEnd !== null) {
-        console.log('✂️ Applying final trimEnd update:', localTrimEnd);
-        onTrackUpdate(track.id, { trimEnd: localTrimEnd });
+      } else {
+        console.log('✂️ TRIM END END:', { finalTrimEnd: currentTrimEnd });
+        
+        // Validation: Ensure values are valid before updating
+        if (isNaN(currentTrimEnd)) {
+          console.error('❌ Invalid trim end value - not updating:', { currentTrimEnd });
+        } else {
+          onTrackUpdate(track.id, { trimEnd: currentTrimEnd });
+        }
+        
         setLocalTrimEnd(null);
       }
       
@@ -398,7 +475,8 @@ export function WaveformBlock({
             pointerEvents: 'auto',
             WebkitUserSelect: 'none',
             WebkitTouchCallout: 'none',
-            touchAction: 'none'
+            touchAction: 'none',
+            zIndex: 20
           }}
         >
           <div className={`bg-accent-foreground rounded-full transition-all ${
@@ -420,7 +498,8 @@ export function WaveformBlock({
             pointerEvents: 'auto',
             WebkitUserSelect: 'none',
             WebkitTouchCallout: 'none',
-            touchAction: 'none'
+            touchAction: 'none',
+            zIndex: 20
           }}
         >
           <div className={`bg-accent-foreground rounded-full transition-all ${
