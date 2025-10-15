@@ -133,9 +133,10 @@ export class PlaybackEngineService {
       source.buffer = audioBuffer;
 
       const trackGain = this.audioContext.createGain();
-      // Lock the track volume to prevent ducking during recording
-      const volume = track.volume || 1;
+      // Apply track volume
+      const volume = track.volume !== undefined ? track.volume : 1;
       trackGain.gain.setValueAtTime(volume, this.audioContext.currentTime);
+      console.log(`🔊 Track ${track.name} volume set to ${volume}`);
 
       source.connect(trackGain);
       trackGain.connect(this.masterGainNode!);
@@ -143,6 +144,17 @@ export class PlaybackEngineService {
       // Calculate WHEN to start the audio based on track position
       const audioContextStartTime = this.audioContext.currentTime;
       let whenToStart = audioContextStartTime;
+      
+      // Calculate duration to play (respecting trim end)
+      const durationToPlay = trimEnd - actualAudioOffset;
+      
+      console.log(`🎵 Playback details for ${track.name}:`, {
+        actualAudioOffset,
+        trimEnd,
+        durationToPlay,
+        trackStartTime,
+        currentTimelinePosition
+      });
       
       // If playing from timeline start and track has a delayed start time
       if (currentTimelinePosition === 0 && trackStartTime > 0) {

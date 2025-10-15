@@ -40,6 +40,7 @@ export function WaveformBlock({
   const [showSnapIndicator, setShowSnapIndicator] = useState(false);
   const [isLongPressing, setIsLongPressing] = useState(false);
   const [isInTrimMode, setIsInTrimMode] = useState(false);
+  const [isSelected, setIsSelected] = useState(false);
   // Local state for trim preview during dragging
   const [localTrimStart, setLocalTrimStart] = useState<number | null>(null);
   const [localTrimEnd, setLocalTrimEnd] = useState<number | null>(null);
@@ -48,6 +49,7 @@ export function WaveformBlock({
   const audioContextRef = useRef<AudioContext | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const lastTapTime = useRef<number>(0);
+  const selectionTimer = useRef<NodeJS.Timeout | null>(null);
   
   const { snapToGrid: snapToGridFn } = useSnapToGrid({ bpm, snapEnabled: snapToGrid, zoomLevel });
 
@@ -111,6 +113,19 @@ export function WaveformBlock({
     
     lastTapTime.current = now;
     
+    // Single tap - select the block
+    if (!isDragging && !isResizing) {
+      setIsSelected(true);
+      
+      // Auto-deselect after 5 seconds
+      if (selectionTimer.current) {
+        clearTimeout(selectionTimer.current);
+      }
+      selectionTimer.current = setTimeout(() => {
+        setIsSelected(false);
+      }, 5000);
+    }
+    
     // Start long-press timer for moving mode
     longPressTimer.current = setTimeout(() => {
       setIsLongPressing(true);
@@ -141,6 +156,31 @@ export function WaveformBlock({
       longPressTimer.current = null;
     }
     setIsLongPressing(false);
+  };
+
+  // Nudge functions for precise timing adjustments
+  const handleNudgeLeft = () => {
+    const nudgeAmount = 0.050; // 50ms
+    const newStartTime = Math.max(0, (track.startTime || 0) - nudgeAmount);
+    onTrackUpdate(track.id, { startTime: newStartTime });
+    console.log(`⬅️ Nudged ${track.name} left by 50ms, new startTime: ${newStartTime}`);
+    
+    // Haptic feedback
+    if ('vibrate' in navigator) {
+      navigator.vibrate(10);
+    }
+  };
+
+  const handleNudgeRight = () => {
+    const nudgeAmount = 0.050; // 50ms
+    const newStartTime = (track.startTime || 0) + nudgeAmount;
+    onTrackUpdate(track.id, { startTime: newStartTime });
+    console.log(`➡️ Nudged ${track.name} right by 50ms, new startTime: ${newStartTime}`);
+    
+    // Haptic feedback
+    if ('vibrate' in navigator) {
+      navigator.vibrate(10);
+    }
   };
 
   const handleMouseDown = (e: React.MouseEvent, action: 'drag' | 'resize-start' | 'resize-end') => {
@@ -267,6 +307,7 @@ export function WaveformBlock({
         showSnapIndicator ? 'ring-2 ring-accent ring-opacity-50' : ''
       } ${isInTrimMode ? 'border-accent border-4 shadow-accent' : 'border-primary/50'}
       ${isLongPressing ? 'border-green-500 border-4 shadow-green-500/50' : ''}
+      ${isSelected ? 'ring-2 ring-blue-500 ring-opacity-80' : ''}
       ${isLongPressing || isInTrimMode ? 'cursor-grab' : 'cursor-move'}`}
       style={{
         left: `${startPosition}px`,
@@ -305,6 +346,26 @@ export function WaveformBlock({
         <div className="absolute top-1 left-2 text-xs font-medium text-primary-foreground/90 pointer-events-none">
           {track.name}
         </div>
+
+        {/* Nudge buttons - shown when selected */}
+        {isSelected && !isDragging && !isResizing && (
+          <div className="absolute top-1 right-2 flex gap-1 z-10">
+            <button
+              onClick={handleNudgeLeft}
+              className="bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded pointer-events-auto transition-colors"
+              style={{ touchAction: 'auto' }}
+            >
+              ⬅️ 50ms
+            </button>
+            <button
+              onClick={handleNudgeRight}
+              className="bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded pointer-events-auto transition-colors"
+              style={{ touchAction: 'auto' }}
+            >
+              50ms ➡️
+            </button>
+          </div>
+        )}
 
         {/* Enhanced trim handles - larger and more visible in trim mode */}
         <div

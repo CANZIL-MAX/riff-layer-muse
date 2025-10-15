@@ -61,6 +61,36 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
     }
   };
 
+  const handleRefresh = async () => {
+    console.log('🔄 [NATIVE] Refresh button clicked');
+    
+    // Check if we still have permission, re-request if needed
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop());
+      
+      if (!hasPermission) {
+        console.log('✅ [NATIVE] Microphone permission re-granted');
+        setHasPermission(true);
+      }
+      
+      await fetchNativeDevices();
+      
+      toast({
+        title: "Devices Refreshed",
+        description: "Audio device list updated successfully",
+      });
+    } catch (error) {
+      console.error('❌ [NATIVE] Permission denied on refresh:', error);
+      setHasPermission(false);
+      toast({
+        title: "Permission Required",
+        description: "Microphone access is required to refresh devices",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleNativeDeviceChange = async (portUID: string) => {
     try {
       const result = await AudioInput.setPreferredInput({ portUID });
@@ -143,10 +173,10 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
           )}
           
           <Button
+            onClick={handleRefresh}
+            disabled={isLoading}
             variant="outline"
             size="sm"
-            onClick={fetchNativeDevices}
-            disabled={isLoading}
             className="px-3"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />

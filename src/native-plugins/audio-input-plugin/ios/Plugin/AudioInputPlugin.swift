@@ -33,6 +33,28 @@ public class AudioInputPlugin: CAPPlugin, CAPBridgedPlugin {
         do {
             // Configure for recording with playback, allow Bluetooth
             try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetooth, .defaultToSpeaker])
+            
+            // Force built-in microphone as input when AirPods/Bluetooth are connected
+            // This ensures audio output goes to AirPods but input comes from iPhone mic
+            if let availableInputs = session.availableInputs {
+                // Check if Bluetooth headphones are connected
+                let hasBluetoothOutput = session.currentRoute.outputs.contains { output in
+                    output.portType == .bluetoothA2DP || output.portType == .bluetoothHFP || output.portType == .bluetoothLE
+                }
+                
+                if hasBluetoothOutput {
+                    // Find and set built-in microphone as preferred input
+                    if let builtInMic = availableInputs.first(where: { $0.portType == .builtInMic }) {
+                        try session.setPreferredInput(builtInMic)
+                        print("🎤 Forced built-in microphone as input (AirPods/Bluetooth detected for output)")
+                    } else {
+                        print("⚠️ Built-in microphone not found, using default input")
+                    }
+                } else {
+                    print("🎤 Using default input routing (no Bluetooth output detected)")
+                }
+            }
+            
             try session.setActive(true, options: [])
             isSessionConfigured = true
             print("✅ AudioInputPlugin: Audio session configured successfully")
@@ -118,8 +140,14 @@ public class AudioInputPlugin: CAPPlugin, CAPBridgedPlugin {
         switch reason {
         case .newDeviceAvailable:
             reasonString = "newDeviceAvailable"
+            // Re-configure audio session to ensure built-in mic stays as input
+            isSessionConfigured = false
+            configureAudioSession()
         case .oldDeviceUnavailable:
             reasonString = "oldDeviceUnavailable"
+            // Re-configure audio session when devices disconnect
+            isSessionConfigured = false
+            configureAudioSession()
         case .categoryChange:
             reasonString = "categoryChange"
         case .override:
@@ -130,6 +158,9 @@ public class AudioInputPlugin: CAPPlugin, CAPBridgedPlugin {
             reasonString = "noSuitableRouteForCategory"
         case .routeConfigurationChange:
             reasonString = "routeConfigurationChange"
+            // Re-configure to maintain built-in mic preference
+            isSessionConfigured = false
+            configureAudioSession()
         @unknown default:
             reasonString = "unknown"
         }

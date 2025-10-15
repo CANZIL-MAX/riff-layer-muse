@@ -438,11 +438,11 @@ export function RecordingStudio() {
           const current = await AudioInput.getCurrentInput();
           
           if (current.device && current.device.isBluetooth) {
-            compensatedLatency = 0.300; // Fixed 300ms for AirPods/Bluetooth
-            console.log('🎯 Using AirPods latency compensation: 300ms');
+            compensatedLatency = 0.200; // Fixed 200ms for AirPods/Bluetooth
+            console.log('🎯 Using AirPods latency compensation: 200ms');
           } else {
-            compensatedLatency = 0.020; // Built-in microphone: 20ms
-            console.log('🎯 Using built-in mic latency compensation: 20ms');
+            compensatedLatency = 0.040; // Built-in microphone: 40ms
+            console.log('🎯 Using built-in mic latency compensation: 40ms');
           }
         } catch (error) {
           console.warn('Could not detect device type for latency:', error);
@@ -453,11 +453,11 @@ export function RecordingStudio() {
         const deviceName = selectedDeviceId?.toLowerCase() || '';
         
         if (deviceName.includes('bluetooth')) {
-          compensatedLatency = 0.300; // Bluetooth: 300ms
-          console.log('🎯 Using Bluetooth latency compensation: 300ms');
+          compensatedLatency = 0.200; // Bluetooth: 200ms
+          console.log('🎯 Using Bluetooth latency compensation: 200ms');
         } else {
-          compensatedLatency = 0.020; // Built-in: 20ms
-          console.log('🎯 Using built-in latency compensation: 20ms');
+          compensatedLatency = 0.040; // Built-in: 40ms
+          console.log('🎯 Using built-in latency compensation: 40ms');
         }
       }
 
@@ -1313,11 +1313,33 @@ export function RecordingStudio() {
           onToggleTrackMute={memoizedCallbacks.toggleTrackMute}
           onToggleTrackSolo={memoizedCallbacks.toggleTrackSolo}
           onToggleTrackRecord={() => {}} // TODO: Implement track recording
-          onTrackVolumeChange={(trackId, volume) => {
+          onTrackVolumeChange={async (trackId, volume) => {
             const updatedTracks = tracks.map(track => 
               track.id === trackId ? { ...track, volume } : track
             );
             setTracks(updatedTracks);
+            
+            // Persist volume change to project
+            if (currentProject) {
+              const updatedProject = {
+                ...currentProject,
+                tracks: updatedTracks,
+                lastModified: new Date().toISOString()
+              };
+              await ProjectManager.saveProject(updatedProject);
+              setCurrentProject(updatedProject);
+            }
+            
+            // If currently playing, restart playback to apply volume changes
+            if (isPlaying) {
+              PlaybackEngine.stop();
+              const newPlayableTracks = soloTracks.size > 0 
+                ? updatedTracks.filter(track => soloTracks.has(track.id) && track.audioData)
+                : updatedTracks.filter(track => !track.isMuted && track.audioData);
+              if (newPlayableTracks.length > 0) {
+                await PlaybackEngine.playTracks(newPlayableTracks, currentTime);
+              }
+            }
           }}
           onRemoveTrack={memoizedCallbacks.removeTrack}
           onUpdateTrackName={memoizedCallbacks.updateTrackName}
