@@ -467,19 +467,16 @@ export function RecordingStudio() {
         }
       }
 
-      // Get audio stream (works on both web and native with Info.plist permission)
+      // iOS-only app: Don't pass deviceId - let native AVAudioSession handle device selection
+      // The Swift plugin already forces built-in microphone
       const audioConstraints: MediaTrackConstraints = {
         echoCancellation: false,
         noiseSuppression: false,
         autoGainControl: false,
         sampleRate: 44100,
         channelCount: 1,
+        // NO deviceId - Swift AudioInputPlugin controls device selection
       };
-      
-      // Only add deviceId if we have a valid selected device
-      if (selectedDeviceId && selectedDeviceId.trim() !== '') {
-        audioConstraints.deviceId = { exact: selectedDeviceId };
-      }
       
       const constraints: MediaStreamConstraints = { 
         audio: audioConstraints

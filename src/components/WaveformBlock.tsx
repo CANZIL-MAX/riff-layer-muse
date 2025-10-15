@@ -48,6 +48,9 @@ export function WaveformBlock({
   const audioContextRef = useRef<AudioContext | null>(null);
   const lastTapTime = useRef<number>(0);
   const selectionTimer = useRef<NodeJS.Timeout | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number; time: number; timelineLeft: number } | null>(null);
+  const dragThresholdPx = 10; // iOS standard: 10px to distinguish tap from drag
+  const doubleTapTimeMs = 300; // iOS standard: 300ms for double-tap
   
   const { snapToGrid: snapToGridFn } = useSnapToGrid({ bpm, snapEnabled: snapToGrid, zoomLevel });
 
@@ -95,93 +98,123 @@ export function WaveformBlock({
   const startPosition = timeToPixels(startTime);
   const blockWidth = timeToPixels(displayDuration);
 
-  // Native iOS touch handling - simplified and direct
+  // Native iOS touch handling - proper gesture detection with movement threshold
   const handleTouchStart = (e: React.TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
     
+    const touch = e.touches[0];
     const now = Date.now();
-    const timeSinceLastTap = now - lastTapTime.current;
+    const timelineRect = blockRef.current?.closest('[data-timeline]')?.getBoundingClientRect();
     
-    // Double-tap detection for trim mode toggle
-    if (timeSinceLastTap < 300) {
+    // Store initial touch info for gesture detection
+    touchStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      time: now,
+      timelineLeft: timelineRect?.left || 0
+    };
+    
+    // Check for double-tap
+    const timeSinceLastTap = now - lastTapTime.current;
+    if (timeSinceLastTap < doubleTapTimeMs) {
+      // Double-tap detected - toggle trim mode
+      console.log('👆👆 Double-tap detected - toggling trim mode');
       setIsInTrimMode(!isInTrimMode);
       setShowSnapIndicator(true);
       setTimeout(() => setShowSnapIndicator(false), 1000);
       
-      // Haptic feedback
-      if ('vibrate' in navigator) {
-        navigator.vibrate(30);
-      }
+      if ('vibrate' in navigator) navigator.vibrate(30);
+      touchStartRef.current = null; // Cancel any further processing
       return;
     }
     
     lastTapTime.current = now;
-    
-    // Single tap - select the block
-    setIsSelected(true);
-    if (selectionTimer.current) {
-      clearTimeout(selectionTimer.current);
-    }
-    selectionTimer.current = setTimeout(() => {
-      setIsSelected(false);
-    }, 5000);
   };
 
-  // Direct touch drag handling for block repositioning
-  const handleBlockDragStart = (e: React.TouchEvent) => {
-    // Don't allow dragging in trim mode
-    if (isInTrimMode) return;
-    
-    e.preventDefault();
-    e.stopPropagation();
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    if (isInTrimMode) return; // Don't interfere with trim handles
+    if (isDragging) return; // Already dragging
     
     const touch = e.touches[0];
-    const timelineRect = blockRef.current?.closest('[data-timeline]')?.getBoundingClientRect();
-    const startX = touch.clientX - (timelineRect?.left || 0) + scrollOffset;
-    const initialStartTime = track.startTime || 0;
+    const deltaX = Math.abs(touch.clientX - touchStartRef.current.x);
+    const deltaY = Math.abs(touch.clientY - touchStartRef.current.y);
     
-    setIsDragging(true);
+    // If movement exceeds threshold, start dragging
+    if (deltaX > dragThresholdPx || deltaY > dragThresholdPx) {
+      console.log('🎯 Movement threshold exceeded, starting drag');
+      
+      const timelineRect = blockRef.current?.closest('[data-timeline]')?.getBoundingClientRect();
+      const startX = touchStartRef.current.x - touchStartRef.current.timelineLeft + scrollOffset;
+      const initialStartTime = track.startTime || 0;
+      
+      setIsDragging(true);
+      if ('vibrate' in navigator) navigator.vibrate(10);
+      
+      const handleDragMove = (moveEvent: TouchEvent) => {
+        moveEvent.preventDefault();
+        const currentTouch = moveEvent.touches[0];
+        const currentX = currentTouch.clientX - (timelineRect?.left || 0) + scrollOffset;
+        const deltaX = currentX - startX;
+        const deltaTime = pixelsToTime(deltaX);
+        
+        let newStartTime = Math.max(0, initialStartTime + deltaTime);
+        
+        if (snapToGrid) {
+          newStartTime = snapToGridFn(newStartTime);
+          setShowSnapIndicator(true);
+        } else {
+          setShowSnapIndicator(false);
+        }
+        
+        setLocalStartTime(newStartTime);
+      };
+      
+      const handleDragEnd = () => {
+        if (localStartTime !== null) {
+          console.log('🎯 Applying final startTime update:', localStartTime);
+          onTrackUpdate(track.id, { startTime: localStartTime });
+          setLocalStartTime(null);
+        }
+        setIsDragging(false);
+        setShowSnapIndicator(false);
+        touchStartRef.current = null;
+        document.removeEventListener('touchmove', handleDragMove);
+        document.removeEventListener('touchend', handleDragEnd);
+      };
+      
+      // Clear the start ref so we don't re-trigger
+      touchStartRef.current = null;
+      
+      document.addEventListener('touchmove', handleDragMove, { passive: false });
+      document.addEventListener('touchend', handleDragEnd);
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
     
-    // Haptic feedback
-    if ('vibrate' in navigator) {
-      navigator.vibrate(10);
+    // Touch ended without significant movement - it's a TAP
+    const touchDuration = Date.now() - touchStartRef.current.time;
+    
+    if (touchDuration < 500) {
+      // Quick tap - select the block
+      console.log('👆 Single tap detected - selecting block');
+      setIsSelected(true);
+      if ('vibrate' in navigator) navigator.vibrate(10);
+      
+      if (selectionTimer.current) clearTimeout(selectionTimer.current);
+      selectionTimer.current = setTimeout(() => {
+        setIsSelected(false);
+      }, 5000);
     }
     
-    const handleMove = (moveEvent: TouchEvent) => {
-      moveEvent.preventDefault();
-      const currentTouch = moveEvent.touches[0];
-      const currentX = currentTouch.clientX - (timelineRect?.left || 0) + scrollOffset;
-      const deltaX = currentX - startX;
-      const deltaTime = pixelsToTime(deltaX);
-      
-      let newStartTime = Math.max(0, initialStartTime + deltaTime);
-      
-      if (snapToGrid) {
-        newStartTime = snapToGridFn(newStartTime);
-        setShowSnapIndicator(true);
-      } else {
-        setShowSnapIndicator(false);
-      }
-      
-      setLocalStartTime(newStartTime);
-    };
-    
-    const handleEnd = () => {
-      if (localStartTime !== null) {
-        console.log('🎯 Applying final startTime update:', localStartTime);
-        onTrackUpdate(track.id, { startTime: localStartTime });
-        setLocalStartTime(null);
-      }
-      setIsDragging(false);
-      setShowSnapIndicator(false);
-      document.removeEventListener('touchmove', handleMove);
-      document.removeEventListener('touchend', handleEnd);
-    };
-    
-    document.addEventListener('touchmove', handleMove, { passive: false });
-    document.addEventListener('touchend', handleEnd);
+    touchStartRef.current = null;
   };
+
+  // This function is no longer needed - drag is handled by handleTouchMove with threshold
+  // Keeping for backwards compatibility but it won't be called
 
   // Nudge functions for precise timing adjustments
   const handleNudgeLeft = (e: React.TouchEvent) => {
@@ -303,13 +336,9 @@ export function WaveformBlock({
         WebkitTapHighlightColor: 'transparent',
         touchAction: 'none'
       }}
-      onTouchStart={(e) => {
-        handleTouchStart(e);
-        // Only start drag if not in trim mode
-        if (!isInTrimMode && e.touches.length === 1) {
-          handleBlockDragStart(e);
-        }
-      }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
       {/* Waveform content */}
       <div className="h-full relative">

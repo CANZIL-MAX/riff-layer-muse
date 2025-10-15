@@ -31,11 +31,11 @@ public class AudioInputPlugin: CAPPlugin, CAPBridgedPlugin {
         
         let session = AVAudioSession.sharedInstance()
         do {
-            // Configure for recording with playback
-            // allowBluetoothA2DP: Bluetooth for OUTPUT only (AirPods speakers for monitoring)
+            // iOS-only DAW: Use .measurement mode to prioritize built-in mic quality
+            // allowBluetoothA2DP: Bluetooth for OUTPUT only (AirPods/Bluetooth speakers)
             // This prevents iOS from routing INPUT to Bluetooth microphone
-            // The iPhone's built-in mic will always be used for recording
-            try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothA2DP, .defaultToSpeaker])
+            // The iPhone's built-in mic will ALWAYS be used for recording
+            try session.setCategory(.playAndRecord, mode: .measurement, options: [.allowBluetoothA2DP, .defaultToSpeaker])
             
             // Always prefer built-in microphone for input
             // This ensures high-quality recording even when AirPods are connected
@@ -77,22 +77,25 @@ public class AudioInputPlugin: CAPPlugin, CAPBridgedPlugin {
     }
     
     @objc func getCurrentInput(_ call: CAPPluginCall) {
+        // iOS-only DAW: ALWAYS return built-in microphone
+        // Even if iOS route shows AirPods, we force built-in mic
         let session = AVAudioSession.sharedInstance()
         
-        // Don't reactivate - session is already configured
-        guard let currentInput = session.currentRoute.inputs.first else {
+        if let availableInputs = session.availableInputs,
+           let builtInMic = availableInputs.first(where: { $0.portType == .builtInMic }) {
+            let device = [
+                "portUID": builtInMic.uid,
+                "portName": "iPhone Microphone (Built-in)",
+                "portType": builtInMic.portType.rawValue,
+                "isBluetooth": false
+            ]
+            call.resolve(["device": device])
+            print("✅ [AudioInputPlugin] Returning built-in mic: \(builtInMic.portName)")
+        } else {
+            // Fallback - should never happen on iOS
             call.resolve(["device": NSNull()])
-            return
+            print("⚠️ [AudioInputPlugin] Built-in mic not found in available inputs")
         }
-        
-        let device = [
-            "portUID": currentInput.uid,
-            "portName": currentInput.portName,
-            "portType": currentInput.portType.rawValue,
-            "isBluetooth": currentInput.portType == .bluetoothHFP || currentInput.portType == .bluetoothA2DP || currentInput.portType == .bluetoothLE
-        ]
-        
-        call.resolve(["device": device])
     }
     
     @objc func setPreferredInput(_ call: CAPPluginCall) {

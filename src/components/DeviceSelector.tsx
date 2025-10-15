@@ -41,18 +41,22 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
     
     setIsLoading(true);
     try {
-      console.log('🎧 [NATIVE] Fetching available audio input devices...');
+      console.log('🎧 [iOS] Fetching available audio input devices...');
       const result = await AudioInput.getAvailableInputs();
-      console.log('🎧 [NATIVE] Available devices:', result.devices?.length || 0);
+      console.log('🎧 [iOS] Available devices:', result.devices?.length || 0);
       
-      setNativeDevices(result.devices);
+      // iOS-only: Filter to show ONLY built-in microphone
+      const builtInDevices = result.devices.filter(device => 
+        device.portType === 'MicrophoneBuiltIn' || !device.isBluetooth
+      );
       
-      // Auto-select current device
-      const current = await AudioInput.getCurrentInput();
-      if (current.device) {
-        onDeviceChange(current.device.portUID);
-      } else if (result.devices.length > 0) {
-        onDeviceChange(result.devices[0].portUID);
+      setNativeDevices(builtInDevices);
+      console.log('🎤 [iOS] Filtered to built-in devices:', builtInDevices.length);
+      
+      // Auto-select built-in mic
+      if (builtInDevices.length > 0) {
+        onDeviceChange(builtInDevices[0].portUID);
+        console.log('✅ [iOS] Auto-selected built-in mic:', builtInDevices[0].portName);
       }
     } catch (error) {
       console.error('❌ Error fetching devices:', error);
@@ -123,10 +127,14 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
     
     const listener = AudioInput.addListener('audioRouteChanged', async (event) => {
       console.log('🎧 Audio route changed:', event.reason);
-      // Silently refresh device list when routes change
+      // Silently refresh device list when routes change, but filter to built-in only
       if (hasPermission) {
         const result = await AudioInput.getAvailableInputs();
-        setNativeDevices(result.devices);
+        // iOS-only: Filter to built-in microphone
+        const builtInDevices = result.devices.filter(device => 
+          device.portType === 'MicrophoneBuiltIn' || !device.isBluetooth
+        );
+        setNativeDevices(builtInDevices);
       }
     });
     

@@ -98,23 +98,7 @@ export const DAWTimeline = memo(function DAWTimeline({
     onSeek(Math.max(0, Math.min(time, totalDuration)));
   }, [pixelsToTime, scrollPosition, totalDuration, onSeek]);
 
-  // Enhanced gesture handling for iPhone
-  const handleWheel = useCallback((event: React.WheelEvent) => {
-    if (event.ctrlKey || event.metaKey) {
-      // Zoom with Ctrl/Cmd + wheel
-      event.preventDefault();
-      const zoomDirection = event.deltaY > 0 ? -1 : 1;
-      if (zoomDirection > 0) {
-        zoomIn();
-      } else {
-        zoomOut();
-      }
-    } else {
-      // Horizontal scroll
-      event.preventDefault();
-      scroll(event.deltaY * 2);
-    }
-  }, [scroll, zoomIn, zoomOut]);
+  // iOS-only app - no mouse wheel handler needed
 
   // Pinch-to-zoom gesture handling
   const lastPinchDistance = useRef<number>(0);
@@ -203,15 +187,14 @@ export const DAWTimeline = memo(function DAWTimeline({
             onZoom={handlePinchZoom}
             className="flex-1 overflow-auto"
           >
-            <div 
-              ref={scrollContainerRef}
-              className="w-full h-full"
-              style={{ 
-                touchAction: 'none',
-                WebkitOverflowScrolling: 'touch'
-              }}
-               onWheel={handleWheel}
-            >
+        <div 
+          ref={scrollContainerRef}
+          className="w-full h-full"
+          style={{ 
+            touchAction: 'none',
+            WebkitOverflowScrolling: 'touch'
+          }}
+        >
               {/* Timeline content */}
             <div 
               className="relative"
