@@ -44,16 +44,8 @@ export default defineConfig(({ mode }) => ({
           if (id.includes('node_modules/@capacitor')) {
             return 'vendor-capacitor';
           }
-          // Audio components (lazy loaded)
-          if (id.includes('src/components/Recording') || 
-              id.includes('src/components/Audio') ||
-              id.includes('src/components/Track')) {
-            return 'audio-components';
-          }
-          // Services
-          if (id.includes('src/services')) {
-            return 'services';
-          }
+          // Let Vite handle audio components and services automatically
+          // to prevent circular dependency issues with singleton exports
         }
       }
     },
