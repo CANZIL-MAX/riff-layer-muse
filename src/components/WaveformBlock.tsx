@@ -38,7 +38,6 @@ export function WaveformBlock({
   const [isResizing, setIsResizing] = useState<'start' | 'end' | false>(false);
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [showSnapIndicator, setShowSnapIndicator] = useState(false);
-  const [isLongPressing, setIsLongPressing] = useState(false);
   const [isInTrimMode, setIsInTrimMode] = useState(false);
   const [isSelected, setIsSelected] = useState(false);
   // Local state for trim preview during dragging
@@ -47,7 +46,6 @@ export function WaveformBlock({
   const [localStartTime, setLocalStartTime] = useState<number | null>(null);
   const blockRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const lastTapTime = useRef<number>(0);
   const selectionTimer = useRef<NodeJS.Timeout | null>(null);
   
@@ -97,69 +95,99 @@ export function WaveformBlock({
   const startPosition = timeToPixels(startTime);
   const blockWidth = timeToPixels(displayDuration);
 
-  // Handle touch gestures for iPhone-optimized interaction
+  // Native iOS touch handling - simplified and direct
   const handleTouchStart = (e: React.TouchEvent) => {
-    e.preventDefault(); // Prevent iOS selection UI
+    e.preventDefault();
+    e.stopPropagation();
+    
     const now = Date.now();
     const timeSinceLastTap = now - lastTapTime.current;
     
-    // Double-tap detection for trim mode
+    // Double-tap detection for trim mode toggle
     if (timeSinceLastTap < 300) {
       setIsInTrimMode(!isInTrimMode);
       setShowSnapIndicator(true);
       setTimeout(() => setShowSnapIndicator(false), 1000);
+      
+      // Haptic feedback
+      if ('vibrate' in navigator) {
+        navigator.vibrate(30);
+      }
       return;
     }
     
     lastTapTime.current = now;
     
     // Single tap - select the block
-    if (!isDragging && !isResizing) {
-      setIsSelected(true);
-      
-      // Auto-deselect after 5 seconds
-      if (selectionTimer.current) {
-        clearTimeout(selectionTimer.current);
-      }
-      selectionTimer.current = setTimeout(() => {
-        setIsSelected(false);
-      }, 5000);
+    setIsSelected(true);
+    if (selectionTimer.current) {
+      clearTimeout(selectionTimer.current);
     }
-    
-    // Start long-press timer for moving mode
-    longPressTimer.current = setTimeout(() => {
-      setIsLongPressing(true);
-      // Haptic feedback if available
-      if ('vibrate' in navigator) {
-        navigator.vibrate(50);
-      }
-      // Trigger synthetic drag after long press
-      if (blockRef.current) {
-        const touch = e.touches[0];
-        const rect = blockRef.current.getBoundingClientRect();
-        const syntheticEvent = {
-          preventDefault: () => {},
-          stopPropagation: () => {},
-          clientX: touch.clientX,
-          clientY: touch.clientY,
-          currentTarget: blockRef.current,
-          target: blockRef.current
-        } as any;
-        handleMouseDown(syntheticEvent, 'drag');
-      }
-    }, 500); // 500ms for long press
+    selectionTimer.current = setTimeout(() => {
+      setIsSelected(false);
+    }, 5000);
   };
 
-  const handleTouchEnd = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
+  // Direct touch drag handling for block repositioning
+  const handleBlockDragStart = (e: React.TouchEvent) => {
+    // Don't allow dragging in trim mode
+    if (isInTrimMode) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const touch = e.touches[0];
+    const timelineRect = blockRef.current?.closest('[data-timeline]')?.getBoundingClientRect();
+    const startX = touch.clientX - (timelineRect?.left || 0) + scrollOffset;
+    const initialStartTime = track.startTime || 0;
+    
+    setIsDragging(true);
+    
+    // Haptic feedback
+    if ('vibrate' in navigator) {
+      navigator.vibrate(10);
     }
-    setIsLongPressing(false);
+    
+    const handleMove = (moveEvent: TouchEvent) => {
+      moveEvent.preventDefault();
+      const currentTouch = moveEvent.touches[0];
+      const currentX = currentTouch.clientX - (timelineRect?.left || 0) + scrollOffset;
+      const deltaX = currentX - startX;
+      const deltaTime = pixelsToTime(deltaX);
+      
+      let newStartTime = Math.max(0, initialStartTime + deltaTime);
+      
+      if (snapToGrid) {
+        newStartTime = snapToGridFn(newStartTime);
+        setShowSnapIndicator(true);
+      } else {
+        setShowSnapIndicator(false);
+      }
+      
+      setLocalStartTime(newStartTime);
+    };
+    
+    const handleEnd = () => {
+      if (localStartTime !== null) {
+        console.log('🎯 Applying final startTime update:', localStartTime);
+        onTrackUpdate(track.id, { startTime: localStartTime });
+        setLocalStartTime(null);
+      }
+      setIsDragging(false);
+      setShowSnapIndicator(false);
+      document.removeEventListener('touchmove', handleMove);
+      document.removeEventListener('touchend', handleEnd);
+    };
+    
+    document.addEventListener('touchmove', handleMove, { passive: false });
+    document.addEventListener('touchend', handleEnd);
   };
 
   // Nudge functions for precise timing adjustments
-  const handleNudgeLeft = () => {
+  const handleNudgeLeft = (e: React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     const nudgeAmount = 0.050; // 50ms
     const newStartTime = Math.max(0, (track.startTime || 0) - nudgeAmount);
     onTrackUpdate(track.id, { startTime: newStartTime });
@@ -171,7 +199,10 @@ export function WaveformBlock({
     }
   };
 
-  const handleNudgeRight = () => {
+  const handleNudgeRight = (e: React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     const nudgeAmount = 0.050; // 50ms
     const newStartTime = (track.startTime || 0) + nudgeAmount;
     onTrackUpdate(track.id, { startTime: newStartTime });
@@ -183,143 +214,102 @@ export function WaveformBlock({
     }
   };
 
-  const handleMouseDown = (e: React.MouseEvent, action: 'drag' | 'resize-start' | 'resize-end') => {
+  // Native touch handlers for trim operations
+  const handleTrimTouchStart = (e: React.TouchEvent, side: 'start' | 'end') => {
     e.preventDefault();
     e.stopPropagation();
-
-    // Guard against null currentTarget
-    if (!e.currentTarget) return;
-
-    // Get the timeline container to calculate proper coordinates
-    const timelineElement = e.currentTarget.closest('[data-timeline]') || 
-                           document.querySelector('[data-timeline]');
     
-    const timelineRect = timelineElement?.getBoundingClientRect();
+    const touch = e.touches[0];
+    const timelineRect = blockRef.current?.closest('[data-timeline]')?.getBoundingClientRect();
+    const startX = touch.clientX - (timelineRect?.left || 0) + scrollOffset;
     
-    // Calculate initial position relative to the timeline, accounting for scroll
-    const startX = e.clientX - (timelineRect?.left || 0) + scrollOffset;
+    setIsResizing(side);
+    setShowSnapIndicator(true);
     
-    const initialStartTime = track.startTime || 0;
+    // Haptic feedback
+    if ('vibrate' in navigator) {
+      navigator.vibrate(10);
+    }
+    
     const initialTrimStart = track.trimStart || 0;
     const initialTrimEnd = track.trimEnd || track.duration;
-
-    if (action === 'drag') {
-      // Prevent dragging in trim mode
-      if (isInTrimMode) {
-        return;
-      }
-      setIsDragging(true);
-    } else if (action === 'resize-start') {
-      setIsResizing('start');
-    } else if (action === 'resize-end') {
-      setIsResizing('end');
-    }
-
-    const handleMouseMove = (e: MouseEvent) => {
-      // Calculate current mouse position relative to timeline, accounting for scroll
-      const currentX = e.clientX - (timelineRect?.left || 0) + scrollOffset;
+    const initialStartTime = track.startTime || 0;
+    
+    const handleMove = (moveEvent: TouchEvent) => {
+      moveEvent.preventDefault();
+      const currentTouch = moveEvent.touches[0];
+      const currentX = currentTouch.clientX - (timelineRect?.left || 0) + scrollOffset;
       const deltaX = currentX - startX;
       const deltaTime = pixelsToTime(deltaX);
-
-      if (action === 'drag') {
-        let newStartTime = Math.max(0, initialStartTime + deltaTime);
-        
-        // Apply snap to grid if enabled
-        if (snapToGrid) {
-          const snappedTime = snapToGridFn(newStartTime);
-          newStartTime = snappedTime;
-          setShowSnapIndicator(true);
-        } else {
-          setShowSnapIndicator(false);
-        }
-        
-        // Update local state for immediate visual feedback
-        setLocalStartTime(newStartTime);
-      } else if (action === 'resize-start') {
+      
+      if (side === 'start') {
         // Trimming from the start: adjust both trimStart and startTime
         const newTrimStart = Math.max(0, Math.min(initialTrimStart + deltaTime, initialTrimEnd - 0.1));
         const trimDelta = newTrimStart - initialTrimStart;
         setLocalTrimStart(newTrimStart);
-        setLocalStartTime(initialStartTime + trimDelta); // Move block as we trim from start
-        setShowSnapIndicator(true);
-      } else if (action === 'resize-end') {
+        setLocalStartTime(initialStartTime + trimDelta);
+      } else {
         // Trimming from the end: only adjust trimEnd
         const newTrimEnd = Math.max(initialTrimStart + 0.1, Math.min(initialTrimEnd + deltaTime, track.duration));
         setLocalTrimEnd(newTrimEnd);
-        setShowSnapIndicator(true);
       }
     };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      setIsResizing(false);
-      setShowSnapIndicator(false);
-      setIsLongPressing(false);
-      
-      // Apply final updates to track on mouseup - this prevents constant playback restarts
-      if (action === 'drag' && localStartTime !== null) {
-        console.log('🎯 Applying final startTime update:', localStartTime);
-        onTrackUpdate(track.id, { startTime: localStartTime });
-        setLocalStartTime(null);
-      } else if (action === 'resize-start' && localTrimStart !== null && localStartTime !== null) {
-        console.log('✂️ Applying final trimStart + startTime update:', { trimStart: localTrimStart, startTime: localStartTime });
+    
+    const handleEnd = () => {
+      // Apply final updates
+      if (side === 'start' && localTrimStart !== null && localStartTime !== null) {
+        console.log('✂️ Applying final trimStart + startTime update:', { 
+          trimStart: localTrimStart, 
+          startTime: localStartTime 
+        });
         onTrackUpdate(track.id, { 
           trimStart: localTrimStart,
           startTime: localStartTime 
         });
         setLocalTrimStart(null);
         setLocalStartTime(null);
-      } else if (action === 'resize-end' && localTrimEnd !== null) {
+      } else if (side === 'end' && localTrimEnd !== null) {
         console.log('✂️ Applying final trimEnd update:', localTrimEnd);
         onTrackUpdate(track.id, { trimEnd: localTrimEnd });
         setLocalTrimEnd(null);
       }
       
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.removeEventListener('touchmove', handleTouchMove);
-      document.removeEventListener('touchend', handleMouseUp);
+      setIsResizing(false);
+      setShowSnapIndicator(false);
+      document.removeEventListener('touchmove', handleMove);
+      document.removeEventListener('touchend', handleEnd);
     };
-
-    const handleTouchMove = (e: TouchEvent) => {
-      e.preventDefault();
-      const touch = e.touches[0];
-      const mouseEvent = new MouseEvent('mousemove', {
-        clientX: touch.clientX,
-        clientY: touch.clientY,
-        bubbles: true
-      });
-      handleMouseMove(mouseEvent);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('touchmove', handleTouchMove, { passive: false });
-    document.addEventListener('touchend', handleMouseUp);
+    
+    document.addEventListener('touchmove', handleMove, { passive: false });
+    document.addEventListener('touchend', handleEnd);
   };
 
   return (
     <div
       ref={blockRef}
+      data-waveform-block
       className={`absolute h-16 bg-primary/80 rounded border-2 overflow-hidden group transition-all duration-200 select-none ${
         isDragging ? 'shadow-glow scale-105' : ''
       } ${track.isMuted ? 'opacity-50' : ''} ${
         showSnapIndicator ? 'ring-2 ring-accent ring-opacity-50' : ''
       } ${isInTrimMode ? 'border-accent border-4 shadow-accent' : 'border-primary/50'}
-      ${isLongPressing ? 'border-green-500 border-4 shadow-green-500/50' : ''}
       ${isSelected ? 'ring-2 ring-blue-500 ring-opacity-80' : ''}
-      ${isLongPressing || isInTrimMode ? 'cursor-grab' : 'cursor-move'}`}
+      ${isInTrimMode ? 'cursor-default' : 'cursor-move'}`}
       style={{
         left: `${startPosition}px`,
-        width: `${Math.max(blockWidth, 20)}px`, // Minimum width for visibility
+        width: `${Math.max(blockWidth, 20)}px`,
         WebkitUserSelect: 'none',
         WebkitTouchCallout: 'none',
         WebkitTapHighlightColor: 'transparent',
         touchAction: 'none'
       }}
-      onMouseDown={(e) => !isInTrimMode ? handleMouseDown(e, 'drag') : undefined}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
+      onTouchStart={(e) => {
+        handleTouchStart(e);
+        // Only start drag if not in trim mode
+        if (!isInTrimMode && e.touches.length === 1) {
+          handleBlockDragStart(e);
+        }
+      }}
     >
       {/* Waveform content */}
       <div className="h-full relative">
@@ -351,16 +341,14 @@ export function WaveformBlock({
         {isSelected && !isDragging && !isResizing && (
           <div className="absolute top-1 right-2 flex gap-1 z-10">
             <button
-              onClick={handleNudgeLeft}
-              className="bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded pointer-events-auto transition-colors"
-              style={{ touchAction: 'auto' }}
+              onTouchEnd={handleNudgeLeft}
+              className="bg-blue-500 active:bg-blue-700 text-white text-xs font-bold px-2 py-1 rounded pointer-events-auto transition-colors"
             >
               ⬅️ 50ms
             </button>
             <button
-              onClick={handleNudgeRight}
-              className="bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded pointer-events-auto transition-colors"
-              style={{ touchAction: 'auto' }}
+              onTouchEnd={handleNudgeRight}
+              className="bg-blue-500 active:bg-blue-700 text-white text-xs font-bold px-2 py-1 rounded pointer-events-auto transition-colors"
             >
               50ms ➡️
             </button>
@@ -372,21 +360,7 @@ export function WaveformBlock({
           className={`absolute left-0 top-0 cursor-ew-resize flex items-center justify-center touch-manipulation transition-all duration-200 select-none ${
             isInTrimMode ? 'w-12 h-full bg-accent opacity-100 border-r-2 border-accent-foreground' : 'w-6 h-full bg-accent opacity-70 group-hover:opacity-100'
           }`}
-          onMouseDown={(e) => handleMouseDown(e, 'resize-start')}
-          onTouchStart={(e) => {
-            e.preventDefault();
-            const touch = e.touches[0];
-            const rect = e.currentTarget.getBoundingClientRect();
-            const mouseEvent = {
-              preventDefault: () => {},
-              stopPropagation: () => {},
-              clientX: touch.clientX,
-              clientY: touch.clientY,
-              currentTarget: e.currentTarget,
-              target: e.currentTarget
-            } as any;
-            handleMouseDown(mouseEvent, 'resize-start');
-          }}
+          onTouchStart={(e) => handleTrimTouchStart(e, 'start')}
           style={{ 
             pointerEvents: 'auto',
             WebkitUserSelect: 'none',
@@ -408,21 +382,7 @@ export function WaveformBlock({
           className={`absolute right-0 top-0 cursor-ew-resize flex items-center justify-center touch-manipulation transition-all duration-200 select-none ${
             isInTrimMode ? 'w-12 h-full bg-accent opacity-100 border-l-2 border-accent-foreground' : 'w-6 h-full bg-accent opacity-70 group-hover:opacity-100'
           }`}
-          onMouseDown={(e) => handleMouseDown(e, 'resize-end')}
-          onTouchStart={(e) => {
-            e.preventDefault();
-            const touch = e.touches[0];
-            const rect = e.currentTarget.getBoundingClientRect();
-            const mouseEvent = {
-              preventDefault: () => {},
-              stopPropagation: () => {},
-              clientX: touch.clientX,
-              clientY: touch.clientY,
-              currentTarget: e.currentTarget,
-              target: e.currentTarget
-            } as any;
-            handleMouseDown(mouseEvent, 'resize-end');
-          }}
+          onTouchStart={(e) => handleTrimTouchStart(e, 'end')}
           style={{ 
             pointerEvents: 'auto',
             WebkitUserSelect: 'none',
@@ -448,13 +408,7 @@ export function WaveformBlock({
         </div>
       )}
       
-      {isLongPressing && (
-        <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-green-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
-          MOVE MODE - Drag to reposition
-        </div>
-      )}
-      
-      {isInTrimMode && !isResizing && (
+      {isInTrimMode && !isResizing && !isDragging && (
         <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-accent text-accent-foreground text-xs px-2 py-1 rounded whitespace-nowrap">
           TRIM MODE - Double-tap to exit
         </div>

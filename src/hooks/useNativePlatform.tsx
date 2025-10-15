@@ -25,9 +25,9 @@ export const useNativePlatform = () => {
   useEffect(() => {
     const checkPlatform = () => {
       let isCapacitorAvailable = false;
-      let isNative = false;
-      let platform = 'web';
-      let storageMode: 'native' | 'memory' | 'unknown' = 'memory';
+      let isNative = true; // iOS-only app - default to native
+      let platform = 'ios';
+      let storageMode: 'native' | 'memory' | 'unknown' = 'native';
 
       try {
         // Multiple methods for native detection
@@ -60,11 +60,11 @@ export const useNativePlatform = () => {
         });
         
       } catch (error) {
-        console.warn('⚠️ Platform detection error, using web fallback:', error);
+        console.warn('⚠️ Platform detection error, defaulting to native:', error);
         isCapacitorAvailable = false;
-        isNative = false;
-        platform = 'web';
-        storageMode = 'memory';
+        isNative = true;
+        platform = 'ios';
+        storageMode = 'native';
       }
 
       setPlatformInfo({

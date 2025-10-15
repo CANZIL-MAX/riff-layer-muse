@@ -16,12 +16,12 @@ export function TimelinePanZoom({ children, onPan, onZoom, className = '' }: Tim
   const { handleTouchStart, handleTouchMove, handleTouchEnd } = useGestureHandling({
     onPan: (deltaX) => onPan(-deltaX), // Invert for natural scrolling
     onZoom,
-    isEnabled: isNative, // Only enable gestures on native
+    isEnabled: true, // iOS-only app - always enable
   });
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || !isNative) return;
+    if (!container) return;
 
     container.addEventListener('touchstart', handleTouchStart, { passive: false });
     container.addEventListener('touchmove', handleTouchMove, { passive: false });

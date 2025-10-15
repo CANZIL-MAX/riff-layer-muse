@@ -430,35 +430,22 @@ export function RecordingStudio() {
         await MetronomeEngine.playCountIn(1);
       }
       
-      // Simplified latency compensation with fixed values
+      // iOS-only latency compensation with fixed values
       let compensatedLatency = 0;
 
-      if (isNative) {
-        try {
-          const current = await AudioInput.getCurrentInput();
-          
-          if (current.device && current.device.isBluetooth) {
-            compensatedLatency = 0.200; // Fixed 200ms for AirPods/Bluetooth
-            console.log('🎯 Using AirPods latency compensation: 200ms');
-          } else {
-            compensatedLatency = 0.040; // Built-in microphone: 40ms
-            console.log('🎯 Using built-in mic latency compensation: 40ms');
-          }
-        } catch (error) {
-          console.warn('Could not detect device type for latency:', error);
-          compensatedLatency = 0.020; // Default to built-in mic
-        }
-      } else {
-        // Web platform - check device name
-        const deviceName = selectedDeviceId?.toLowerCase() || '';
+      try {
+        const current = await AudioInput.getCurrentInput();
         
-        if (deviceName.includes('bluetooth')) {
-          compensatedLatency = 0.200; // Bluetooth: 200ms
-          console.log('🎯 Using Bluetooth latency compensation: 200ms');
+        if (current.device && current.device.isBluetooth) {
+          compensatedLatency = 0.200; // Fixed 200ms for AirPods/Bluetooth
+          console.log('🎯 Using AirPods latency compensation: 200ms');
         } else {
-          compensatedLatency = 0.040; // Built-in: 40ms
-          console.log('🎯 Using built-in latency compensation: 40ms');
+          compensatedLatency = 0.040; // Built-in microphone: 40ms
+          console.log('🎯 Using built-in mic latency compensation: 40ms');
         }
+      } catch (error) {
+        console.warn('Could not detect device type for latency:', error);
+        compensatedLatency = 0.040; // Default to built-in mic
       }
 
       setLatencyCompensation(compensatedLatency);
@@ -843,11 +830,6 @@ export function RecordingStudio() {
   };
 
   const handleNativeExport = async (options: { filename: string; format: string; quality: string }) => {
-    if (!isNative) {
-      await exportProject();
-      return;
-    }
-
     try {
       console.log('🚀 Starting native project export with options:', options);
       
