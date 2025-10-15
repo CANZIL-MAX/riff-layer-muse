@@ -45,18 +45,17 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
       const result = await AudioInput.getAvailableInputs();
       console.log('🎧 [iOS] Available devices:', result.devices?.length || 0);
       
-      // iOS-only: Filter to show ONLY built-in microphone
-      const builtInDevices = result.devices.filter(device => 
-        device.portType === 'MicrophoneBuiltIn' || !device.isBluetooth
-      );
+      // Show ALL available devices (built-in + Bluetooth)
+      setNativeDevices(result.devices);
+      console.log('🎤 [iOS] Available devices:', result.devices.length);
       
-      setNativeDevices(builtInDevices);
-      console.log('🎤 [iOS] Filtered to built-in devices:', builtInDevices.length);
+      // Auto-select the first device (prefer built-in mic if available)
+      const builtInMic = result.devices.find(d => !d.isBluetooth);
+      const defaultDevice = builtInMic || result.devices[0];
       
-      // Auto-select built-in mic
-      if (builtInDevices.length > 0) {
-        onDeviceChange(builtInDevices[0].portUID);
-        console.log('✅ [iOS] Auto-selected built-in mic:', builtInDevices[0].portName);
+      if (defaultDevice) {
+        onDeviceChange(defaultDevice.portUID);
+        console.log('✅ [iOS] Auto-selected:', defaultDevice.portName);
       }
     } catch (error) {
       console.error('❌ Error fetching devices:', error);
@@ -97,13 +96,24 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
 
   const handleNativeDeviceChange = async (portUID: string) => {
     try {
+      const selectedDevice = nativeDevices.find(d => d.portUID === portUID);
       const result = await AudioInput.setPreferredInput({ portUID });
       onDeviceChange(portUID);
       
-      toast({
-        title: "Device Switched",
-        description: result.message,
-      });
+      // Show quality warning if selecting Bluetooth device
+      if (selectedDevice?.isBluetooth) {
+        toast({
+          title: "⚠️ Bluetooth Microphone Selected",
+          description: "AirPods microphones provide lower audio quality (8kHz). For best results, use the built-in iPhone microphone.",
+          variant: "default",
+          duration: 5000,
+        });
+      } else {
+        toast({
+          title: "Device Switched",
+          description: result.message,
+        });
+      }
     } catch (error) {
       console.error('Error switching device:', error);
       toast({
@@ -127,14 +137,10 @@ export function DeviceSelector({ selectedDeviceId, onDeviceChange }: DeviceSelec
     
     const listener = AudioInput.addListener('audioRouteChanged', async (event) => {
       console.log('🎧 Audio route changed:', event.reason);
-      // Silently refresh device list when routes change, but filter to built-in only
+      // Silently refresh device list when routes change (show all devices)
       if (hasPermission) {
         const result = await AudioInput.getAvailableInputs();
-        // iOS-only: Filter to built-in microphone
-        const builtInDevices = result.devices.filter(device => 
-          device.portType === 'MicrophoneBuiltIn' || !device.isBluetooth
-        );
-        setNativeDevices(builtInDevices);
+        setNativeDevices(result.devices);
       }
     });
     
