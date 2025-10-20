@@ -51,6 +51,13 @@ export function WaveformBlock({
   const touchStartRef = useRef<{ x: number; y: number; time: number; timelineLeft: number } | null>(null);
   const dragThresholdPx = 10; // iOS standard: 10px to distinguish tap from drag
   const doubleTapTimeMs = 300; // iOS standard: 300ms for double-tap
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   
   const { snapToGrid: snapToGridFn } = useSnapToGrid({ bpm, snapEnabled: snapToGrid, zoomLevel });
 
@@ -150,8 +157,8 @@ export function WaveformBlock({
       const timelineRect = blockRef.current?.closest('[data-timeline]')?.getBoundingClientRect();
       
       // ✅ Validation: Ensure we have valid geometry
-      if (!timelineRect) {
-        console.error('❌ Timeline rect not found - cannot drag');
+      if (!timelineRect || !isFinite(scrollOffset)) {
+        console.error('❌ Timeline geometry invalid - cannot drag');
         return;
       }
       
@@ -163,13 +170,18 @@ export function WaveformBlock({
       
       const handleDragMove = (moveEvent: TouchEvent) => {
         moveEvent.preventDefault();
+        
+        if (!moveEvent.touches || moveEvent.touches.length === 0) {
+          console.warn('⚠️ No touches in drag move event');
+          return;
+        }
+        
         const currentTouch = moveEvent.touches[0];
         const currentX = currentTouch.clientX - timelineRect.left + scrollOffset;
         const deltaX = currentX - startX;
         const deltaTime = pixelsToTime(deltaX);
         
-        // ✅ Validation: Check for NaN
-        if (isNaN(deltaTime) || deltaTime === null || deltaTime === undefined) {
+        if (!isFinite(deltaTime)) {
           console.error('❌ Invalid deltaTime in drag:', { deltaX, deltaTime });
           return;
         }
@@ -186,20 +198,26 @@ export function WaveformBlock({
         setLocalStartTime(newStartTime);
       };
       
-      const handleDragEnd = () => {
-        if (localStartTime !== null && !isNaN(localStartTime)) {
-          console.log('🎯 Applying final startTime update:', localStartTime);
-          onTrackUpdate(track.id, { startTime: localStartTime });
-          setLocalStartTime(null);
-        } else {
-          console.error('❌ Invalid localStartTime - not updating:', localStartTime);
-        }
-        setIsDragging(false);
-        setShowSnapIndicator(false);
-        touchStartRef.current = null;
+    const handleDragEnd = () => {
+      if (!isMountedRef.current) {
         document.removeEventListener('touchmove', handleDragMove);
         document.removeEventListener('touchend', handleDragEnd);
-      };
+        return;
+      }
+      
+      if (localStartTime !== null && isFinite(localStartTime)) {
+        console.log('🎯 Applying final startTime update:', localStartTime);
+        onTrackUpdate(track.id, { startTime: localStartTime });
+        setLocalStartTime(null);
+      } else {
+        console.error('❌ Invalid localStartTime - not updating:', localStartTime);
+      }
+      setIsDragging(false);
+      setShowSnapIndicator(false);
+      touchStartRef.current = null;
+      document.removeEventListener('touchmove', handleDragMove);
+      document.removeEventListener('touchend', handleDragEnd);
+    };
       
       // Clear the start ref so we don't re-trigger
       touchStartRef.current = null;
@@ -266,136 +284,142 @@ export function WaveformBlock({
 
   // Native touch handlers for trim operations - REWRITTEN for event isolation and waveform alignment
   const handleTrimTouchStart = (e: React.TouchEvent, side: 'start' | 'end') => {
-    e.preventDefault();
-    e.stopPropagation(); // ✅ CRITICAL: Prevent parent block's handleTouchStart from firing
-    
-    console.log(`✂️ TRIM HANDLE TOUCHED:`, { 
-      side, 
-      initialTrimStart: track.trimStart || 0,
-      initialTrimEnd: track.trimEnd || track.duration,
-      initialStartTime: track.startTime || 0 
-    });
-    
-    const touch = e.touches[0];
-    const timelineRect = blockRef.current?.closest('[data-timeline]')?.getBoundingClientRect();
-    
-    // Validation: Ensure we have valid geometry
-    if (!timelineRect) {
-      console.error('❌ Timeline rect not found - cannot trim');
-      return;
-    }
-    
-    const startX = touch.clientX - timelineRect.left + scrollOffset;
-    
-    setIsResizing(side);
-    setShowSnapIndicator(true);
-    
-    // Haptic feedback
-    if ('vibrate' in navigator) {
-      navigator.vibrate(10);
-    }
-    
-    // ✅ Use CLOSURE VARIABLES instead of React state for immediate value tracking
-    let currentTrimStart = track.trimStart || 0;
-    let currentTrimEnd = track.trimEnd || track.duration;
-    let currentStartTime = track.startTime || 0;
-    const duration = track.duration;
-    
-    const handleMove = (moveEvent: TouchEvent) => {
-      moveEvent.preventDefault();
-      const currentTouch = moveEvent.touches[0];
-      const currentX = currentTouch.clientX - timelineRect.left + scrollOffset;
-      const deltaX = currentX - startX;
-      const deltaTime = pixelsToTime(deltaX);
+    try {
+      e.preventDefault();
+      e.stopPropagation();
       
-      // Validation: Check for NaN
-      if (isNaN(deltaTime) || deltaTime === null || deltaTime === undefined) {
-        console.error('❌ Invalid deltaTime:', { deltaX, deltaTime });
+      console.log(`✂️ TRIM HANDLE TOUCHED:`, { 
+        side, 
+        initialTrimStart: track.trimStart || 0,
+        initialTrimEnd: track.trimEnd || track.duration,
+        initialStartTime: track.startTime || 0 
+      });
+      
+      const touch = e.touches[0];
+      const timelineRect = blockRef.current?.closest('[data-timeline]')?.getBoundingClientRect();
+      
+      if (!timelineRect || !isFinite(scrollOffset)) {
+        console.error('❌ Invalid geometry - cannot trim');
         return;
       }
       
-      if (side === 'start') {
-        // ✅ LEFT HANDLE: Trim from start - adjust BOTH trimStart and startTime to keep waveform anchored
-        const newTrimStart = Math.max(0, Math.min(currentTrimStart + deltaTime, currentTrimEnd - 0.1));
-        const trimChange = newTrimStart - (track.trimStart || 0);
-        
-        // CRITICAL: Move startTime by same amount to keep visible waveform in place
-        const newStartTime = (track.startTime || 0) + trimChange;
-        
-        currentTrimStart = newTrimStart;
-        currentStartTime = newStartTime;
-        
-        // Update local state for visual preview
-        setLocalTrimStart(newTrimStart);
-        setLocalStartTime(newStartTime);
-        
-        console.log('✂️ TRIM START MOVE:', {
-          deltaX,
-          deltaTime,
-          trimChange,
-          newTrimStart,
-          newStartTime,
-          visuallyStaysAtPixel: timeToPixels(newStartTime)
-        });
-      } else {
-        // ✅ RIGHT HANDLE: Trim from end - only adjust trimEnd, startTime unchanged
-        const newTrimEnd = Math.max(currentTrimStart + 0.1, Math.min(currentTrimEnd + deltaTime, duration));
-        
-        currentTrimEnd = newTrimEnd;
-        
-        // Update local state for visual preview
-        setLocalTrimEnd(newTrimEnd);
-        
-        console.log('✂️ TRIM END MOVE:', {
-          deltaX,
-          deltaTime,
-          newTrimEnd,
-          startTimeUnchanged: currentStartTime
-        });
-      }
-    };
-    
-    const handleEnd = () => {
-      // ✅ Apply final updates using closure variables (always up-to-date)
-      if (side === 'start') {
-        console.log('✂️ TRIM START END:', { 
-          finalTrimStart: currentTrimStart, 
-          finalStartTime: currentStartTime 
-        });
-        
-        // Validation: Ensure values are valid before updating
-        if (isNaN(currentTrimStart) || isNaN(currentStartTime)) {
-          console.error('❌ Invalid trim values - not updating:', { currentTrimStart, currentStartTime });
-        } else {
-          onTrackUpdate(track.id, { 
-            trimStart: currentTrimStart,
-            startTime: currentStartTime 
-          });
-        }
-        
-        setLocalTrimStart(null);
-        setLocalStartTime(null);
-      } else {
-        console.log('✂️ TRIM END END:', { finalTrimEnd: currentTrimEnd });
-        
-        // Validation: Ensure values are valid before updating
-        if (isNaN(currentTrimEnd)) {
-          console.error('❌ Invalid trim end value - not updating:', { currentTrimEnd });
-        } else {
-          onTrackUpdate(track.id, { trimEnd: currentTrimEnd });
-        }
-        
-        setLocalTrimEnd(null);
+      const startX = touch.clientX - timelineRect.left + scrollOffset;
+      
+      setIsResizing(side);
+      setShowSnapIndicator(true);
+      
+      if ('vibrate' in navigator) {
+        navigator.vibrate(10);
       }
       
+      let currentTrimStart = track.trimStart || 0;
+      let currentTrimEnd = track.trimEnd || track.duration;
+      let currentStartTime = track.startTime || 0;
+      const duration = track.duration;
+      
+      const handleMove = (moveEvent: TouchEvent) => {
+        moveEvent.preventDefault();
+        
+        if (!moveEvent.touches || moveEvent.touches.length === 0) {
+          console.warn('⚠️ No touches in trim move event');
+          return;
+        }
+        
+        const currentTouch = moveEvent.touches[0];
+        const currentX = currentTouch.clientX - timelineRect.left + scrollOffset;
+        const deltaX = currentX - startX;
+        const deltaTime = pixelsToTime(deltaX);
+        
+        if (!isFinite(deltaTime)) {
+          console.error('❌ Invalid deltaTime:', { deltaX, deltaTime });
+          return;
+        }
+        
+        if (side === 'start') {
+          const newTrimStart = Math.max(0, Math.min(currentTrimStart + deltaTime, currentTrimEnd - 0.1));
+          
+          const trimChange = newTrimStart - currentTrimStart;
+          const newStartTime = currentStartTime + trimChange;
+          
+          currentTrimStart = newTrimStart;
+          currentStartTime = newStartTime;
+          
+          setLocalTrimStart(newTrimStart);
+          setLocalStartTime(newStartTime);
+          
+          console.log('✂️ TRIM START MOVE:', {
+            deltaX,
+            deltaTime,
+            trimChange,
+            newTrimStart,
+            newStartTime,
+            visuallyStaysAtPixel: timeToPixels(newStartTime)
+          });
+        } else {
+          const newTrimEnd = Math.max(currentTrimStart + 0.1, Math.min(currentTrimEnd + deltaTime, duration));
+          
+          currentTrimEnd = newTrimEnd;
+          setLocalTrimEnd(newTrimEnd);
+          
+          console.log('✂️ TRIM END MOVE:', {
+            deltaX,
+            deltaTime,
+            newTrimEnd,
+            startTimeUnchanged: currentStartTime
+          });
+        }
+      };
+      
+      const handleEnd = () => {
+        if (!isMountedRef.current) {
+          document.removeEventListener('touchmove', handleMove);
+          document.removeEventListener('touchend', handleEnd);
+          return;
+        }
+        
+        if (side === 'start') {
+          console.log('✂️ TRIM START END:', { 
+            finalTrimStart: currentTrimStart, 
+            finalStartTime: currentStartTime 
+          });
+          
+          if (!isFinite(currentTrimStart) || !isFinite(currentStartTime)) {
+            console.error('❌ Invalid trim values - not updating:', { currentTrimStart, currentStartTime });
+          } else {
+            onTrackUpdate(track.id, { 
+              trimStart: currentTrimStart,
+              startTime: currentStartTime 
+            });
+          }
+          
+          setLocalTrimStart(null);
+          setLocalStartTime(null);
+        } else {
+          console.log('✂️ TRIM END END:', { finalTrimEnd: currentTrimEnd });
+          
+          if (!isFinite(currentTrimEnd)) {
+            console.error('❌ Invalid trim end value - not updating:', { currentTrimEnd });
+          } else {
+            onTrackUpdate(track.id, { trimEnd: currentTrimEnd });
+          }
+          
+          setLocalTrimEnd(null);
+        }
+        
+        setIsResizing(false);
+        setShowSnapIndicator(false);
+        document.removeEventListener('touchmove', handleMove);
+        document.removeEventListener('touchend', handleEnd);
+      };
+      
+      document.addEventListener('touchmove', handleMove, { passive: false });
+      document.addEventListener('touchend', handleEnd);
+      
+    } catch (error) {
+      console.error('❌ Trim operation failed:', error);
       setIsResizing(false);
       setShowSnapIndicator(false);
-      document.removeEventListener('touchmove', handleMove);
-      document.removeEventListener('touchend', handleEnd);
-    };
-    
-    document.addEventListener('touchmove', handleMove, { passive: false });
-    document.addEventListener('touchend', handleEnd);
+    }
   };
 
   return (
