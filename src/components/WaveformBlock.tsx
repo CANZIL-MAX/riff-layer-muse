@@ -157,26 +157,30 @@ export function WaveformBlock({
       const timelineElement = blockRef.current?.closest('[data-timeline]');
       const timelineRect = timelineElement?.getBoundingClientRect();
       
+      // ✅ Get scroll position from parent scroll container
+      const scrollContainer = timelineElement?.closest('[style*="overflow"]') as HTMLElement;
+      const actualScrollOffset = scrollContainer?.scrollLeft || scrollOffset || 0;
+      
       console.log('🔍 DRAG GEOMETRY DEBUG:', {
         blockRef: !!blockRef.current,
         timelineElement: !!timelineElement,
         timelineRect: !!timelineRect,
-        scrollOffset,
-        scrollOffsetType: typeof scrollOffset,
-        isFiniteScrollOffset: isFinite(scrollOffset)
+        scrollContainer: !!scrollContainer,
+        actualScrollOffset,
+        propScrollOffset: scrollOffset
       });
       
       // ✅ Validation: Ensure we have valid geometry
-      if (!timelineRect || !isFinite(scrollOffset)) {
+      if (!timelineRect || !isFinite(actualScrollOffset)) {
         console.error('❌ Timeline geometry invalid - cannot drag', {
           reason: !timelineRect ? 'no timelineRect' : 'invalid scrollOffset',
           timelineRect,
-          scrollOffset
+          actualScrollOffset
         });
         return;
       }
       
-      const startX = touchStartRef.current.x - touchStartRef.current.timelineLeft + scrollOffset;
+      const startX = touchStartRef.current.x - touchStartRef.current.timelineLeft + actualScrollOffset;
       const initialStartTime = track.startTime || 0;
       
       setIsDragging(true);
@@ -313,25 +317,29 @@ export function WaveformBlock({
       const timelineElement = blockRef.current?.closest('[data-timeline]');
       const timelineRect = timelineElement?.getBoundingClientRect();
       
+      // ✅ Get scroll position from parent scroll container
+      const scrollContainer = timelineElement?.closest('[style*="overflow"]') as HTMLElement;
+      const actualScrollOffset = scrollContainer?.scrollLeft || scrollOffset || 0;
+      
       console.log('🔍 TRIM GEOMETRY DEBUG:', {
         blockRef: !!blockRef.current,
         timelineElement: !!timelineElement,
         timelineRect: !!timelineRect,
-        scrollOffset,
-        scrollOffsetType: typeof scrollOffset,
-        isFiniteScrollOffset: isFinite(scrollOffset)
+        scrollContainer: !!scrollContainer,
+        actualScrollOffset,
+        propScrollOffset: scrollOffset
       });
       
-      if (!timelineRect || !isFinite(scrollOffset)) {
+      if (!timelineRect || !isFinite(actualScrollOffset)) {
         console.error('❌ Invalid geometry - cannot trim', {
           reason: !timelineRect ? 'no timelineRect' : 'invalid scrollOffset',
           timelineRect,
-          scrollOffset
+          actualScrollOffset
         });
         return;
       }
       
-      const startX = touch.clientX - timelineRect.left + scrollOffset;
+      const startX = touch.clientX - timelineRect.left + actualScrollOffset;
       
       setIsResizing(side);
       setShowSnapIndicator(true);
@@ -354,7 +362,7 @@ export function WaveformBlock({
         }
         
         const currentTouch = moveEvent.touches[0];
-        const currentX = currentTouch.clientX - timelineRect.left + scrollOffset;
+        const currentX = currentTouch.clientX - timelineRect.left + actualScrollOffset;
         const deltaX = currentX - startX;
         const deltaTime = pixelsToTime(deltaX);
         

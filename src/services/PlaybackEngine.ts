@@ -6,6 +6,7 @@ export class PlaybackEngineService {
   private startTime: number = 0;
   private pauseTime: number = 0;
   private playingSources: Map<string, AudioBufferSourceNode> = new Map();
+  private trackGainNodes: Map<string, GainNode> = new Map();
   private masterGainNode: GainNode | null = null;
   private onTimeUpdateCallback?: (currentTime: number) => void;
   private animationFrameId?: number;
@@ -138,6 +139,9 @@ export class PlaybackEngineService {
       trackGain.gain.setValueAtTime(volume, this.audioContext.currentTime);
       console.log(`🔊 Track ${track.name} volume set to ${volume}`);
 
+      // Store the gain node for this track
+      this.trackGainNodes.set(track.id, trackGain);
+
       source.connect(trackGain);
       trackGain.connect(this.masterGainNode!);
 
@@ -179,6 +183,7 @@ export class PlaybackEngineService {
 
       source.onended = () => {
         this.playingSources.delete(track.id);
+        this.trackGainNodes.delete(track.id);
         if (this.playingSources.size === 0) {
           this.isPlaying = false;
           this.stopTimeUpdate();
@@ -211,6 +216,7 @@ export class PlaybackEngineService {
     }
     
     this.playingSources.clear();
+    this.trackGainNodes.clear();
     this.isPlaying = false;
     this.pauseTime = 0;
     this.stopTimeUpdate();
@@ -303,6 +309,15 @@ export class PlaybackEngineService {
         Math.max(0, Math.min(1, volume)), 
         this.audioContext?.currentTime || 0
       );
+    }
+  }
+
+  updateTrackVolume(trackId: string, volume: number): void {
+    const gainNode = this.trackGainNodes.get(trackId);
+    if (gainNode && this.audioContext) {
+      const clampedVolume = Math.max(0, Math.min(1, volume));
+      gainNode.gain.setValueAtTime(clampedVolume, this.audioContext.currentTime);
+      console.log(`🔊 Updated track ${trackId} volume to ${clampedVolume} (without restarting)`);
     }
   }
 }

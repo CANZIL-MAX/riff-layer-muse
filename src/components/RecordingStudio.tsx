@@ -1309,15 +1309,9 @@ export function RecordingStudio() {
               setCurrentProject(updatedProject);
             }
             
-            // If currently playing, restart playback to apply volume changes
+            // If currently playing, just update the volume without restarting
             if (isPlaying) {
-              PlaybackEngine.stop();
-              const newPlayableTracks = soloTracks.size > 0 
-                ? updatedTracks.filter(track => soloTracks.has(track.id) && track.audioData)
-                : updatedTracks.filter(track => !track.isMuted && track.audioData);
-              if (newPlayableTracks.length > 0) {
-                await PlaybackEngine.playTracks(newPlayableTracks, currentTime);
-              }
+              PlaybackEngine.updateTrackVolume(trackId, volume);
             }
           }}
           onRemoveTrack={memoizedCallbacks.removeTrack}
