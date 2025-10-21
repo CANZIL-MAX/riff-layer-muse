@@ -154,11 +154,25 @@ export function WaveformBlock({
     if (deltaX > dragThresholdPx || deltaY > dragThresholdPx) {
       console.log('🎯 Movement threshold exceeded, starting drag');
       
-      const timelineRect = blockRef.current?.closest('[data-timeline]')?.getBoundingClientRect();
+      const timelineElement = blockRef.current?.closest('[data-timeline]');
+      const timelineRect = timelineElement?.getBoundingClientRect();
+      
+      console.log('🔍 DRAG GEOMETRY DEBUG:', {
+        blockRef: !!blockRef.current,
+        timelineElement: !!timelineElement,
+        timelineRect: !!timelineRect,
+        scrollOffset,
+        scrollOffsetType: typeof scrollOffset,
+        isFiniteScrollOffset: isFinite(scrollOffset)
+      });
       
       // ✅ Validation: Ensure we have valid geometry
       if (!timelineRect || !isFinite(scrollOffset)) {
-        console.error('❌ Timeline geometry invalid - cannot drag');
+        console.error('❌ Timeline geometry invalid - cannot drag', {
+          reason: !timelineRect ? 'no timelineRect' : 'invalid scrollOffset',
+          timelineRect,
+          scrollOffset
+        });
         return;
       }
       
@@ -296,10 +310,24 @@ export function WaveformBlock({
       });
       
       const touch = e.touches[0];
-      const timelineRect = blockRef.current?.closest('[data-timeline]')?.getBoundingClientRect();
+      const timelineElement = blockRef.current?.closest('[data-timeline]');
+      const timelineRect = timelineElement?.getBoundingClientRect();
+      
+      console.log('🔍 TRIM GEOMETRY DEBUG:', {
+        blockRef: !!blockRef.current,
+        timelineElement: !!timelineElement,
+        timelineRect: !!timelineRect,
+        scrollOffset,
+        scrollOffsetType: typeof scrollOffset,
+        isFiniteScrollOffset: isFinite(scrollOffset)
+      });
       
       if (!timelineRect || !isFinite(scrollOffset)) {
-        console.error('❌ Invalid geometry - cannot trim');
+        console.error('❌ Invalid geometry - cannot trim', {
+          reason: !timelineRect ? 'no timelineRect' : 'invalid scrollOffset',
+          timelineRect,
+          scrollOffset
+        });
         return;
       }
       
