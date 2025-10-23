@@ -530,6 +530,7 @@ export function WaveformBlock({
 
         {/* Enhanced trim handles - larger and more visible in trim mode */}
         <div
+          data-trim-handle="start"
           className={`absolute left-0 top-0 cursor-ew-resize flex items-center justify-center touch-manipulation transition-all duration-200 select-none ${
             isInTrimMode ? 'w-12 h-full bg-accent opacity-100 border-r-2 border-accent-foreground' : 'w-6 h-full bg-accent opacity-70 group-hover:opacity-100'
           }`}
@@ -553,6 +554,7 @@ export function WaveformBlock({
         </div>
         
         <div
+          data-trim-handle="end"
           className={`absolute right-0 top-0 cursor-ew-resize flex items-center justify-center touch-manipulation transition-all duration-200 select-none ${
             isInTrimMode ? 'w-12 h-full bg-accent opacity-100 border-l-2 border-accent-foreground' : 'w-6 h-full bg-accent opacity-70 group-hover:opacity-100'
           }`}

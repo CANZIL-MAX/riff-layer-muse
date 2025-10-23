@@ -27,11 +27,15 @@ export function useGestureHandling({ onPan, onZoom, isEnabled = true }: GestureH
     if (!isEnabled) return;
 
     const target = e.target as HTMLElement;
+    const isOnTrimHandle = target.closest('[data-trim-handle]');
     const isOnWaveformBlock = target.closest('[data-waveform-block]');
     
-    // 🎯 Smart event delegation: Single finger on waveform block? Let block handle it
-    if (e.touches.length === 1 && isOnWaveformBlock) {
-      console.log('🎯 Touch on waveform block, letting block handle it');
+    // 🎯 Location-based gesture routing:
+    // - Trim handles → Let WaveformBlock handle trimming
+    // - Waveform block body → Let WaveformBlock handle dragging
+    // - Empty timeline → Handle scrolling here
+    if (e.touches.length === 1 && (isOnTrimHandle || isOnWaveformBlock)) {
+      console.log('🎯 Touch on', isOnTrimHandle ? 'trim handle' : 'waveform block', '→ block handles it');
       return; // Don't preventDefault, don't handle - let WaveformBlock take control
     }
     
