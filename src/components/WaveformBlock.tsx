@@ -364,7 +364,10 @@ export function WaveformBlock({
         const currentTouch = moveEvent.touches[0];
         const currentX = currentTouch.clientX - timelineRect.left + actualScrollOffset;
         const deltaX = currentX - startX;
-        const deltaTime = pixelsToTime(deltaX);
+        
+        // Apply sensitivity dampening for trim (30% of raw movement)
+        const TRIM_SENSITIVITY = 0.3;
+        const deltaTime = pixelsToTime(deltaX) * TRIM_SENSITIVITY;
         
         if (!isFinite(deltaTime)) {
           console.error('❌ Invalid deltaTime:', { deltaX, deltaTime });
