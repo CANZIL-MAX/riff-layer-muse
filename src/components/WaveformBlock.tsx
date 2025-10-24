@@ -107,8 +107,8 @@ export function WaveformBlock({
 
   // Native iOS touch handling - proper gesture detection with movement threshold
   const handleTouchStart = (e: React.TouchEvent) => {
-    e.preventDefault(); // Prevent iOS default behavior
-    // ✅ REMOVED stopPropagation - parent TimelinePanZoom now respects our touch events
+    // 🎯 Don't preventDefault yet - let timeline scrolling work
+    // Only prevent if we actually handle the gesture (double-tap or drag)
     
     console.log('🎵 WaveformBlock handling touch start on:', track.name);
     
@@ -128,6 +128,7 @@ export function WaveformBlock({
     const timeSinceLastTap = now - lastTapTime.current;
     if (timeSinceLastTap < doubleTapTimeMs) {
       // Double-tap detected - toggle trim mode
+      e.preventDefault(); // Block handled this gesture
       console.log('👆👆 Double-tap detected - toggling trim mode');
       setIsInTrimMode(!isInTrimMode);
       setShowSnapIndicator(true);
@@ -152,6 +153,8 @@ export function WaveformBlock({
     
     // If movement exceeds threshold, start dragging
     if (deltaX > dragThresholdPx || deltaY > dragThresholdPx) {
+      e.preventDefault(); // Block is now handling the drag
+      e.stopPropagation(); // Prevent timeline scrolling while dragging
       console.log('🎯 Movement threshold exceeded, starting drag');
       
       const timelineElement = blockRef.current?.closest('[data-timeline]');

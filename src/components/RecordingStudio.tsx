@@ -10,6 +10,7 @@ import { DeviceSelector } from '@/components/DeviceSelector';
 import { MetronomeControls } from '@/components/MetronomeControls';
 import { NativeExportDialog } from '@/components/NativeExportDialog';
 import { useNativePlatform } from '@/hooks/useNativePlatform';
+import { useUndoRedo } from '@/hooks/useUndoRedo';
 import AudioInput from '@/plugins/AudioInputPlugin';
 
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,7 @@ import { Card } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Toaster } from '@/components/ui/toaster';
 import { useToast } from '@/hooks/use-toast';
-import { Mic, Play, Pause, Square, Upload, Save, Download, FolderOpen, Volume2, Eye, EyeOff, ChevronDown } from 'lucide-react';
+import { Mic, Play, Pause, Square, Upload, Save, Download, FolderOpen, Volume2, Eye, EyeOff, ChevronDown, Undo, Redo } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Project, AudioTrack } from '@/services/ProjectManager';
 import { SimpleFallback } from '@/components/SimpleFallback';
@@ -89,7 +90,10 @@ export function RecordingStudio() {
   const [initError, setInitError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
-  const [tracks, setTracks] = useState<AudioTrack[]>([]);
+  
+  // Undo/Redo state management
+  const { tracks, setTracks, undo, redo, canUndo, canRedo } = useUndoRedo([]);
+  
   const [isRecording, setIsRecording] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [recordingName, setRecordingName] = useState('');
@@ -357,7 +361,23 @@ export function RecordingStudio() {
       setTracks(currentProject.tracks);
       setProjectName(currentProject.name);
     }
-  }, [currentProject, currentProjectId]);
+  }, [currentProject, currentProjectId, setTracks]);
+
+  // Keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') {
+        e.preventDefault();
+        if (canUndo) handleUndo();
+      } else if ((e.ctrlKey || e.metaKey) && (e.shiftKey && e.key === 'z' || e.key === 'y')) {
+        e.preventDefault();
+        if (canRedo) handleRedo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [canUndo, canRedo]);
 
   const initAudioContext = useCallback(async () => {
     if (!audioContextRef.current) {
@@ -1054,6 +1074,40 @@ export function RecordingStudio() {
     setShowProjectSelector(false);
   };
 
+  const handleUndo = async () => {
+    const previousTracks = undo();
+    if (previousTracks && currentProject) {
+      const updatedProject = {
+        ...currentProject,
+        tracks: previousTracks,
+        lastModified: new Date().toISOString()
+      };
+      await ProjectManager.saveProject(updatedProject);
+      setCurrentProject(updatedProject);
+      toast({
+        title: "Undo",
+        description: "Reverted to previous state",
+      });
+    }
+  };
+
+  const handleRedo = async () => {
+    const nextTracks = redo();
+    if (nextTracks && currentProject) {
+      const updatedProject = {
+        ...currentProject,
+        tracks: nextTracks,
+        lastModified: new Date().toISOString()
+      };
+      await ProjectManager.saveProject(updatedProject);
+      setCurrentProject(updatedProject);
+      toast({
+        title: "Redo",
+        description: "Restored to next state",
+      });
+    }
+  };
+
   const updateTrackName = async (trackId: string, newName: string) => {
     if (!newName.trim()) return;
     
@@ -1223,6 +1277,16 @@ export function RecordingStudio() {
                 >
                   <Square className="w-5 h-5 mr-2" />
                   Stop
+                </Button>
+
+                <Button onClick={handleUndo} disabled={!canUndo} variant="outline" className="min-h-[48px] touch-manipulation" size="lg" title="Undo (Ctrl+Z)">
+                  <Undo className="w-5 h-5" />
+                  <span className="sr-only">Undo</span>
+                </Button>
+
+                <Button onClick={handleRedo} disabled={!canRedo} variant="outline" className="min-h-[48px] touch-manipulation" size="lg" title="Redo (Ctrl+Y)">
+                  <Redo className="w-5 h-5" />
+                  <span className="sr-only">Redo</span>
                 </Button>
 
                 <div className="relative">

@@ -31,12 +31,12 @@ export function useGestureHandling({ onPan, onZoom, isEnabled = true }: GestureH
     const isOnWaveformBlock = target.closest('[data-waveform-block]');
     
     // 🎯 Location-based gesture routing:
-    // - Trim handles → Let WaveformBlock handle trimming
-    // - Waveform block body → Let WaveformBlock handle dragging
+    // - Trim handles → Let WaveformBlock handle trimming (block has its own handler)
+    // - Waveform block body → Track touch but let block decide if it's a move
     // - Empty timeline → Handle scrolling here
-    if (e.touches.length === 1 && (isOnTrimHandle || isOnWaveformBlock)) {
-      console.log('🎯 Touch on', isOnTrimHandle ? 'trim handle' : 'waveform block', '→ block handles it');
-      return; // Don't preventDefault, don't handle - let WaveformBlock take control
+    if (e.touches.length === 1 && isOnTrimHandle) {
+      console.log('🎯 Touch on trim handle → block handles it');
+      return; // Let WaveformBlock handle trim operations
     }
     
     console.log('🌐 Timeline handling touch:', e.touches.length, 'fingers', isOnWaveformBlock ? 'on block' : 'on timeline');
