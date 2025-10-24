@@ -5,6 +5,7 @@ import { WaveformBlock } from '@/components/WaveformBlock';
 import { MeasureRuler } from '@/components/MeasureRuler';
 import { ZoomControls } from '@/components/ZoomControls';
 import { TimelinePanZoom } from '@/components/TimelinePanZoom';
+import { TimelineScrollbar } from '@/components/TimelineScrollbar';
 import { useTimeline } from '@/hooks/useTimeline';
 import { useTimelineZoom } from '@/hooks/useTimelineZoom';
 import { Card } from '@/components/ui/card';
@@ -293,6 +294,15 @@ export const DAWTimeline = memo(function DAWTimeline({
             </div>
             </div>
           </TimelinePanZoom>
+
+          {/* Timeline Scrollbar */}
+          <TimelineScrollbar
+            scrollPosition={scrollPosition}
+            maxScrollPosition={maxScrollPosition}
+            onScroll={(position) => scroll(position - scrollPosition)}
+            visibleWidth={baseTimelineWidth}
+            totalWidth={zoomedWidth}
+          />
 
           {/* Timeline info */}
           <div className="px-4 py-2 border-t border-border bg-timeline/50 text-sm text-muted-foreground">

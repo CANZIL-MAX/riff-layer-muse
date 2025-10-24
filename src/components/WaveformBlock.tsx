@@ -198,12 +198,12 @@ export function WaveformBlock({
         }
         
         const currentTouch = moveEvent.touches[0];
-        const currentX = currentTouch.clientX - timelineRect.left + scrollOffset;
+        const currentX = currentTouch.clientX - timelineRect.left + actualScrollOffset;
         const deltaX = currentX - startX;
         const deltaTime = pixelsToTime(deltaX);
         
-        if (!isFinite(deltaTime)) {
-          console.error('❌ Invalid deltaTime in drag:', { deltaX, deltaTime });
+        if (!isFinite(deltaX) || !isFinite(deltaTime)) {
+          console.error('❌ Invalid drag values:', { deltaX, deltaTime, currentX, startX, actualScrollOffset });
           return;
         }
         
