@@ -4,9 +4,7 @@ const config: CapacitorConfig = {
   appId: 'com.lovable.rifflayermuse',
   appName: 'Riff Layer Muse',
   webDir: 'dist',
-  // Native app configuration
   // Bundle web assets for offline operation
-  bundledWebRuntime: false,
   plugins: {
     AudioInputPlugin: {
       // Local plugin configuration
