@@ -9,6 +9,7 @@ interface WaveformBlockProps {
   pixelsToTime: (pixels: number) => number;
   timelineWidth: number;
   onTrackUpdate: (trackId: string, updates: Partial<AudioTrack>) => void;
+  onCutTrack?: (originalId: string, part1: AudioTrack, part2: AudioTrack) => void;
   isPlaying: boolean;
   currentTime: number;
   bpm?: number;
@@ -25,6 +26,7 @@ export function WaveformBlock({
   pixelsToTime,
   timelineWidth,
   onTrackUpdate,
+  onCutTrack,
   isPlaying,
   currentTime,
   bpm = 120,
@@ -40,6 +42,8 @@ export function WaveformBlock({
   const [showSnapIndicator, setShowSnapIndicator] = useState(false);
   const [isInTrimMode, setIsInTrimMode] = useState(false);
   const [isSelected, setIsSelected] = useState(false);
+  const [tapCount, setTapCount] = useState(0);
+  const [lastTapTimeState, setLastTapTimeState] = useState(0);
   // Local state for trim preview during dragging
   const [localTrimStart, setLocalTrimStart] = useState<number | null>(null);
   const [localTrimEnd, setLocalTrimEnd] = useState<number | null>(null);
@@ -48,7 +52,13 @@ export function WaveformBlock({
   const audioContextRef = useRef<AudioContext | null>(null);
   const lastTapTime = useRef<number>(0);
   const selectionTimer = useRef<NodeJS.Timeout | null>(null);
-  const touchStartRef = useRef<{ x: number; y: number; time: number; timelineLeft: number } | null>(null);
+  const touchStartRef = useRef<{ 
+    x: number; 
+    y: number; 
+    time: number; 
+    timelineLeft: number;
+    draggedStartTime?: number;
+  } | null>(null);
   const dragThresholdPx = 10; // iOS standard: 10px to distinguish tap from drag
   const doubleTapTimeMs = 300; // iOS standard: 300ms for double-tap
   const isMountedRef = useRef(true);
@@ -121,25 +131,43 @@ export function WaveformBlock({
       x: touch.clientX,
       y: touch.clientY,
       time: now,
-      timelineLeft: timelineRect?.left || 0
+      timelineLeft: timelineRect?.left || 0,
+      draggedStartTime: track.startTime || 0
     };
     
-    // Check for double-tap
-    const timeSinceLastTap = now - lastTapTime.current;
-    if (timeSinceLastTap < doubleTapTimeMs) {
-      // Double-tap detected - toggle trim mode
-      e.preventDefault(); // Block handled this gesture
-      console.log('👆👆 Double-tap detected - toggling trim mode');
-      setIsInTrimMode(!isInTrimMode);
-      setShowSnapIndicator(true);
-      setTimeout(() => setShowSnapIndicator(false), 1000);
+    // Triple-tap detection for cut (within 500ms)
+    const timeSinceLastTap = now - lastTapTimeState;
+    if (timeSinceLastTap < 500 && timeSinceLastTap > 0) {
+      const newTapCount = tapCount + 1;
+      setTapCount(newTapCount);
+      setLastTapTimeState(now);
       
-      if ('vibrate' in navigator) navigator.vibrate(30);
-      touchStartRef.current = null; // Cancel any further processing
+      if (newTapCount === 3) {
+        console.log('✂️ Triple-tap detected - cutting track');
+        e.preventDefault();
+        handleCut();
+        setTapCount(0);
+        setLastTapTimeState(0);
+        touchStartRef.current = null;
+        return;
+      } else if (newTapCount === 2) {
+        // Double-tap detected - toggle trim mode
+        e.preventDefault();
+        console.log('👆👆 Double-tap detected - toggling trim mode');
+        setIsInTrimMode(!isInTrimMode);
+        setShowSnapIndicator(true);
+        setTimeout(() => setShowSnapIndicator(false), 1000);
+        
+        if ('vibrate' in navigator) navigator.vibrate(30);
+        touchStartRef.current = null;
+        return;
+      }
       return;
     }
     
-    lastTapTime.current = now;
+    // Reset tap tracking
+    setTapCount(1);
+    setLastTapTimeState(now);
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
@@ -216,6 +244,11 @@ export function WaveformBlock({
           setShowSnapIndicator(false);
         }
         
+        // Store in closure for handleDragEnd
+        if (touchStartRef.current) {
+          touchStartRef.current.draggedStartTime = newStartTime;
+        }
+        
         setLocalStartTime(newStartTime);
       };
       
@@ -226,12 +259,14 @@ export function WaveformBlock({
         return;
       }
       
-      if (localStartTime !== null && isFinite(localStartTime)) {
-        console.log('🎯 Applying final startTime update:', localStartTime);
-        onTrackUpdate(track.id, { startTime: localStartTime });
+      const draggedStartTime = touchStartRef.current?.draggedStartTime;
+      
+      if (draggedStartTime !== undefined && isFinite(draggedStartTime)) {
+        console.log('🎯 Applying final startTime update:', draggedStartTime);
+        onTrackUpdate(track.id, { startTime: draggedStartTime });
         setLocalStartTime(null);
       } else {
-        console.error('❌ Invalid localStartTime - not updating:', localStartTime);
+        console.error('❌ Invalid draggedStartTime - not updating:', draggedStartTime);
       }
       setIsDragging(false);
       setShowSnapIndicator(false);
@@ -301,6 +336,60 @@ export function WaveformBlock({
     if ('vibrate' in navigator) {
       navigator.vibrate(10);
     }
+  };
+
+  const handleCut = () => {
+    if (!track.audioData || !onCutTrack) {
+      console.log('⚠️ Cannot cut - missing audio data or onCutTrack callback');
+      return;
+    }
+    
+    const trackStartTime = track.startTime || 0;
+    const trimStart = track.trimStart || 0;
+    const trimEnd = track.trimEnd || 0;
+    const trackEndTime = trackStartTime + (track.duration - trimStart - trimEnd);
+    
+    // Check if cursor is within this track's bounds
+    if (currentTime <= trackStartTime || currentTime >= trackEndTime) {
+      console.log('⚠️ Cursor not on this track, skipping cut');
+      return;
+    }
+    
+    // Calculate where to split within the audio
+    const cutOffsetInTrack = currentTime - trackStartTime;
+    const absoluteCutPoint = trimStart + cutOffsetInTrack;
+    
+    // Create two new tracks
+    const track1: AudioTrack = {
+      ...track,
+      id: `${track.id}_part1_${Date.now()}`,
+      name: `${track.name} (1)`,
+      trimEnd: track.duration - absoluteCutPoint,
+      duration: track.duration
+    };
+    
+    const track2: AudioTrack = {
+      ...track,
+      id: `${track.id}_part2_${Date.now()}`,
+      name: `${track.name} (2)`,
+      startTime: currentTime,
+      trimStart: absoluteCutPoint,
+      duration: track.duration
+    };
+    
+    console.log('✂️ Cutting track:', {
+      original: track.name,
+      cutPoint: currentTime,
+      track1: { name: track1.name, trimEnd: track1.trimEnd },
+      track2: { name: track2.name, startTime: track2.startTime, trimStart: track2.trimStart }
+    });
+    
+    // Haptic feedback
+    if ('vibrate' in navigator) {
+      navigator.vibrate([50, 50, 50]);
+    }
+    
+    onCutTrack(track.id, track1, track2);
   };
 
   // Native touch handlers for trim operations - REWRITTEN for event isolation and waveform alignment

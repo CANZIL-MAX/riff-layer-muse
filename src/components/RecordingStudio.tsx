@@ -1077,6 +1077,7 @@ export function RecordingStudio() {
   const handleUndo = async () => {
     const previousTracks = undo();
     if (previousTracks && currentProject) {
+      // Tracks state already updated by undo(), just save to storage
       const updatedProject = {
         ...currentProject,
         tracks: previousTracks,
@@ -1094,6 +1095,7 @@ export function RecordingStudio() {
   const handleRedo = async () => {
     const nextTracks = redo();
     if (nextTracks && currentProject) {
+      // Tracks state already updated by redo(), just save to storage
       const updatedProject = {
         ...currentProject,
         tracks: nextTracks,
@@ -1384,6 +1386,30 @@ export function RecordingStudio() {
           snapToGrid={snapToGrid}
           onScrollToTime={setScrollToTimeFunction}
           soloTracks={soloTracks}
+          onCutTrack={async (originalId, part1, part2) => {
+            console.log('✂️ Cut track callback:', { originalId, part1: part1.name, part2: part2.name });
+            
+            const updatedTracks = tracks.flatMap(track => 
+              track.id === originalId ? [part1, part2] : [track]
+            );
+            
+            setTracks(updatedTracks);
+            
+            if (currentProject) {
+              const updatedProject = {
+                ...currentProject,
+                tracks: updatedTracks,
+                lastModified: new Date().toISOString()
+              };
+              await ProjectManager.saveProject(updatedProject);
+              setCurrentProject(updatedProject);
+            }
+            
+            toast({
+              title: "Track Cut",
+              description: `Split "${part1.name}" into two tracks`,
+            });
+          }}
           onTrackUpdate={async (trackId, updates) => {
             console.log('🔄 Track update called:', trackId, updates);
             

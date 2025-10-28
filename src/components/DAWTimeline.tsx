@@ -25,6 +25,7 @@ interface DAWTimelineProps {
   onRemoveTrack: (trackId: string) => void;
   onUpdateTrackName: (trackId: string, name: string) => void;
   onTrackUpdate: (trackId: string, updates: Partial<AudioTrack>) => void;
+  onCutTrack?: (originalId: string, part1: AudioTrack, part2: AudioTrack) => void;
   bpm?: number;
   snapToGrid?: boolean;
   onScrollToTime?: (scrollToTimeFunction: (time: number) => void) => void;
@@ -48,6 +49,7 @@ export const DAWTimeline = memo(function DAWTimeline({
   onRemoveTrack,
   onUpdateTrackName,
   onTrackUpdate,
+  onCutTrack,
   bpm = 120,
   snapToGrid = true,
   onScrollToTime,
@@ -267,6 +269,7 @@ export const DAWTimeline = memo(function DAWTimeline({
                           pixelsToTime={pixelsToTime}
                           timelineWidth={zoomedWidth}
                           onTrackUpdate={onTrackUpdate}
+                          onCutTrack={onCutTrack}
                           isPlaying={isPlaying}
                           currentTime={currentTime}
                           bpm={bpm}
@@ -299,7 +302,10 @@ export const DAWTimeline = memo(function DAWTimeline({
           <TimelineScrollbar
             scrollPosition={scrollPosition}
             maxScrollPosition={maxScrollPosition}
-            onScroll={(position) => scroll(position - scrollPosition)}
+            onScroll={(newPosition) => {
+              const delta = newPosition - scrollPosition;
+              scroll(delta);
+            }}
             visibleWidth={baseTimelineWidth}
             totalWidth={zoomedWidth}
           />

@@ -45,14 +45,20 @@ export function TimelineScrollbar({
         <span className="text-xs text-muted-foreground min-w-[3rem]">
           {Math.round(scrollPercentage)}%
         </span>
-        <Slider
-          value={[scrollPosition]}
-          min={0}
-          max={maxScrollPosition}
-          step={1}
-          onValueChange={([value]) => onScroll(value)}
+        <div 
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
           className="flex-1"
-        />
+        >
+          <Slider
+            value={[scrollPosition]}
+            min={0}
+            max={maxScrollPosition}
+            step={1}
+            onValueChange={([value]) => onScroll(value)}
+            className="w-full"
+          />
+        </div>
       </div>
 
       <Button

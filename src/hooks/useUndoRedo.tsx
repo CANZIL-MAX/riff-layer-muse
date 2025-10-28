@@ -12,6 +12,8 @@ export function useUndoRedo(initialTracks: AudioTrack[]) {
   const [tracks, setTracks] = useState<AudioTrack[]>(initialTracks);
   const historyRef = useRef<HistoryState[]>([{ tracks: initialTracks, timestamp: Date.now() }]);
   const currentIndexRef = useRef(0);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
 
   const pushHistory = useCallback((newTracks: AudioTrack[]) => {
     // Remove any future history if we're not at the end
@@ -33,14 +35,19 @@ export function useUndoRedo(initialTracks: AudioTrack[]) {
     }
 
     setTracks(newTracks);
+    setCanUndo(currentIndexRef.current > 0);
+    setCanRedo(currentIndexRef.current < historyRef.current.length - 1);
   }, []);
 
   const undo = useCallback(() => {
     if (currentIndexRef.current > 0) {
       currentIndexRef.current--;
       const previousState = historyRef.current[currentIndexRef.current];
-      setTracks(JSON.parse(JSON.stringify(previousState.tracks))); // Deep clone
-      return previousState.tracks;
+      const clonedTracks = JSON.parse(JSON.stringify(previousState.tracks));
+      setTracks(clonedTracks);
+      setCanUndo(currentIndexRef.current > 0);
+      setCanRedo(true);
+      return clonedTracks;
     }
     return null;
   }, []);
@@ -49,14 +56,14 @@ export function useUndoRedo(initialTracks: AudioTrack[]) {
     if (currentIndexRef.current < historyRef.current.length - 1) {
       currentIndexRef.current++;
       const nextState = historyRef.current[currentIndexRef.current];
-      setTracks(JSON.parse(JSON.stringify(nextState.tracks))); // Deep clone
-      return nextState.tracks;
+      const clonedTracks = JSON.parse(JSON.stringify(nextState.tracks));
+      setTracks(clonedTracks);
+      setCanUndo(true);
+      setCanRedo(currentIndexRef.current < historyRef.current.length - 1);
+      return clonedTracks;
     }
     return null;
   }, []);
-
-  const canUndo = currentIndexRef.current > 0;
-  const canRedo = currentIndexRef.current < historyRef.current.length - 1;
 
   return {
     tracks,
