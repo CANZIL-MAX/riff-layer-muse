@@ -217,6 +217,9 @@ export function WaveformBlock({
       setIsDragging(true);
       if ('vibrate' in navigator) navigator.vibrate(10);
       
+      // Closure variable to store draggedStartTime as backup
+      let draggedStartTime = initialStartTime;
+      
       const handleDragMove = (moveEvent: TouchEvent) => {
         moveEvent.preventDefault();
         
@@ -244,7 +247,8 @@ export function WaveformBlock({
           setShowSnapIndicator(false);
         }
         
-        // Store in closure for handleDragEnd
+        // Store in both ref and closure for reliability
+        draggedStartTime = newStartTime;
         if (touchStartRef.current) {
           touchStartRef.current.draggedStartTime = newStartTime;
         }
@@ -259,14 +263,16 @@ export function WaveformBlock({
         return;
       }
       
-      const draggedStartTime = touchStartRef.current?.draggedStartTime;
+      // Try ref first, fallback to closure variable
+      const refDraggedTime = touchStartRef.current?.draggedStartTime;
+      const finalDraggedTime = refDraggedTime !== undefined ? refDraggedTime : draggedStartTime;
       
-      if (draggedStartTime !== undefined && isFinite(draggedStartTime)) {
-        console.log('🎯 Applying final startTime update:', draggedStartTime);
-        onTrackUpdate(track.id, { startTime: draggedStartTime });
+      if (finalDraggedTime !== undefined && isFinite(finalDraggedTime)) {
+        console.log('🎯 Applying final startTime update:', finalDraggedTime);
+        onTrackUpdate(track.id, { startTime: finalDraggedTime });
         setLocalStartTime(null);
       } else {
-        console.error('❌ Invalid draggedStartTime - not updating:', draggedStartTime);
+        console.error('❌ Invalid draggedStartTime - not updating:', finalDraggedTime);
       }
       setIsDragging(false);
       setShowSnapIndicator(false);
@@ -274,9 +280,6 @@ export function WaveformBlock({
       document.removeEventListener('touchmove', handleDragMove);
       document.removeEventListener('touchend', handleDragEnd);
     };
-      
-      // Clear the start ref so we don't re-trigger
-      touchStartRef.current = null;
       
       document.addEventListener('touchmove', handleDragMove, { passive: false });
       document.addEventListener('touchend', handleDragEnd);
