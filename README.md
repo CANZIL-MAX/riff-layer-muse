@@ -1,8 +1,10 @@
-# Welcome to your Lovable project
+# Riff Layer Muse - Native iOS Audio Recording App
 
 ## Project info
 
 **URL**: https://lovable.dev/projects/4a9ac78c-8449-4d96-af58-32ea95a4c29f
+
+This is a **native iOS-only application** for multi-track audio recording. All data is stored locally on the device using Capacitor Filesystem - no external services or cloud dependencies required.
 
 ## How can I edit this code?
 
@@ -59,7 +61,8 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
-- Capacitor (for native iOS/Android apps)
+- Capacitor (native iOS app)
+- Local storage only (no backend/cloud services)
 
 ## Native Mobile App Setup
 
